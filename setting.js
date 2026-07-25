@@ -1,0 +1,88 @@
+import fs from "fs";
+import path from "path";
+import { writeFile } from "fs/promises"; // ✅ Importation pour l'écriture asynchrone
+
+// 🚀 CACHE EN MÉMOIRE (La clé est "ownerId:groupId" ou juste "ownerId")
+const cache = new Map();
+
+/**
+ * Génère le chemin du fichier de configuration de manière sécurisée.
+ * Supporte la hiérarchie : userall/{ownerId}/{groupId}/settings.json
+ */
+function getSettingsPath(ownerId, groupId = null, createIfMissing = false) {
+    // Nettoyage : les IDs sont nettoyés des caractères non numériques
+    const cleanOwnerId = ownerId.replace(/[^0-9]/g, '');
+    
+    // Utilisation d'un chemin dynamique compatible Pterodactyl et local/VPS
+    const rootDir = fs.existsSync('/home/container/Kaya-MD') 
+        ? '/home/container/Kaya-MD' 
+        : process.cwd();
+
+    let baseDir;
+    if (groupId) {
+        // Chemin imbriqué pour les réglages de groupe : userall/{ownerId}/{groupId}/
+        const cleanGroupId = groupId.replace(/[^0-9]/g, '');
+        baseDir = path.join(rootDir, "userall", cleanOwnerId, cleanGroupId);
+    } else {
+        // Chemin racine pour les réglages personnels : userall/{ownerId}/
+        baseDir = path.join(rootDir, "userall", cleanOwnerId);
+    }
+    
+    if (createIfMissing && !fs.existsSync(baseDir)) {
+        fs.mkdirSync(baseDir, { recursive: true });
+    }
+    
+    return path.join(baseDir, "settings.json");
+}
+
+/**
+ * Récupère un réglage
+ */
+export function getSetting(ownerId, key, defaultValue = false, groupId = null) {
+    const cacheKey = groupId ? `${ownerId}:${groupId}` : ownerId;
+    
+    if (!cache.has(cacheKey)) {
+        try {
+            const filePath = getSettingsPath(ownerId, groupId, false);
+            if (fs.existsSync(filePath)) {
+                const data = JSON.parse(fs.readFileSync(filePath, "utf8") || "{}");
+                cache.set(cacheKey, data);
+            } else {
+                cache.set(cacheKey, {});
+            }
+        } catch (e) {
+            console.error(`[SETTING] Erreur lecture ${cacheKey}:`, e);
+            return defaultValue;
+        }
+    }
+
+    const settings = cache.get(cacheKey);
+    return settings && settings.hasOwnProperty(key) ? settings[key] : defaultValue;
+}
+
+/**
+ * Enregistre un réglage (Asynchrone pour ne pas ralentir le bot)
+ */
+export async function setSetting(ownerId, key, value, groupId = null) {
+    try {
+        const cacheKey = groupId ? `${ownerId}:${groupId}` : ownerId;
+        
+        // S'assurer que le cache est initialisé
+        if (!cache.has(cacheKey)) {
+            getSetting(ownerId, key, false, groupId);
+        }
+
+        const settings = cache.get(cacheKey);
+        settings[key] = value;
+        
+        // Mise à jour du cache en mémoire
+        cache.set(cacheKey, settings);
+        
+        // Écriture sur le disque de manière ASYNCHRONE
+        const filePath = getSettingsPath(ownerId, groupId, true); 
+        await writeFile(filePath, JSON.stringify(settings, null, 2));
+        
+    } catch (e) {
+        console.error(`[SETTING] Erreur sauvegarde ${ownerId}:`, e);
+    }
+}
