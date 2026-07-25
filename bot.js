@@ -1,9 +1,10 @@
+// bot.js
 import './config.js'; 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
-import { forceCleanupSession } from './pair.js'; 
+import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,17 +17,6 @@ const pairingFolder = path.join(__dirname, './richstore/pairing');
 if (!fs.existsSync(pairingFolder)) {
     fs.mkdirSync(pairingFolder, { recursive: true });
 }
-
-const getActiveSessions = () => {
-    if (!fs.existsSync(pairingFolder)) return [];
-    return fs.readdirSync(pairingFolder, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name)
-        .filter(folderName => {
-            const credsPath = path.join(pairingFolder, folderName, 'creds.json');
-            return fs.existsSync(credsPath);
-        });
-};
 
 // ================= ROUTES WEB =================
 app.get('/', (req, res) => {
@@ -150,6 +140,10 @@ app.get('/api/listpair', (req, res) => {
     res.json({ total: activeSessions.length, sessions: activeSessions });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`▉ KAYA WEB SERVER is running on port ${PORT}`);
+    
+    // Lancement des écouteurs et restauration des sessions en arrière-plan
+    watchPairingRequests();
+    await restoreSessions();
 });
