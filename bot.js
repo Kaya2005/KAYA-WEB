@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import localtunnel from 'localtunnel';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -79,9 +80,20 @@ app.get('/api/listpair', (req, res) => {
     res.json({ total: activeSessions.length, sessions: activeSessions });
 });
 
-// Écoute sur '0.0.0.0' pour l'affichage correct du port par l'hébergeur
+// Écoute sur '0.0.0.0' et lancement automatique du tunnel HTTPS
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`▉ KAYA WEB SERVER is running on port ${PORT}`);
     watchPairingRequests();
     await restoreSessions();
+
+    try {
+        const tunnel = await localtunnel({ port: PORT });
+        console.log(`🚀 URL HTTPS sécurisée (à copier dans Vercel) : ${tunnel.url}`);
+        
+        tunnel.on('close', () => {
+            console.log('⚠️ Le tunnel Localtunnel a été fermé.');
+        });
+    } catch (error) {
+        console.error('Erreur lors de la création du tunnel HTTPS :', error);
+    }
 });
