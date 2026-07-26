@@ -1,4 +1,3 @@
-// pair.js
 import {
     default as makeWASocket,
     jidDecode,
@@ -36,11 +35,59 @@ export function getActiveSessions() {
         });
 }
 
+// 🧹 NOUVEAU : Fonction pour supprimer les sessions et fichiers inactifs / abandonnés
+export function cleanupInactiveSessions() {
+    if (!fs.existsSync(PAIRING_DIR)) return;
+    const now = Date.now();
+    const STALE_THRESHOLD = 15 * 60 * 1000; // 15 minutes d'inactivité/abandon
+
+    try {
+        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+            const entryPath = path.join(PAIRING_DIR, entry.name);
+
+            if (entry.isFile()) {
+                // Supprimer les vieux fichiers de requêtes ou de pairage orphelins (> 15 min)
+                if (entry.name.startsWith('request_') || entry.name.startsWith('pairing_')) {
+                    try {
+                        const stats = fs.statSync(entryPath);
+                        if (now - stats.mtimeMs > STALE_THRESHOLD) {
+                            fs.unlinkSync(entryPath);
+                            console.log(`[CLEANUP] 🗑️ Fichier temporaire expiré supprimé : ${entry.name}`);
+                        }
+                    } catch (e) {}
+                }
+            } else if (entry.isDirectory()) {
+                // Vérifier si le dossier de session possède un creds.json valide
+                const credsPath = path.join(entryPath, 'creds.json');
+                if (!fs.existsSync(credsPath)) {
+                    // Pas de creds.json = tentative de pairage échouée ou abandonnée
+                    try {
+                        const stats = fs.statSync(entryPath);
+                        if (now - stats.mtimeMs > STALE_THRESHOLD) {
+                            deleteFolderRecursive(entryPath);
+                            console.log(`[CLEANUP] 🗑️ Dossier de session incomplet/inactif supprimé : ${entry.name}`);
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[CLEANUP] ❌ Erreur lors du nettoyage des sessions inactives:", e);
+    }
+}
+
 // 🛡️ Liste pour éviter de lancer deux fois le même processus pour le même utilisateur
 const processingRequests = new Set();
 
 export function watchPairingRequests() {
+    // Exécuter un premier nettoyage au démarrage du watcher
+    cleanupInactiveSessions();
+
     setInterval(() => {
+        // Lancer le nettoyage des inactifs à chaque cycle de vérification
+        cleanupInactiveSessions();
+
         if (!fs.existsSync(PAIRING_DIR)) return;
         const files = fs.readdirSync(PAIRING_DIR);
         for (const file of files) {
