@@ -6,7 +6,9 @@ import express from 'express';
 import cors from 'cors';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -77,7 +79,8 @@ app.get('/api/listpair', (req, res) => {
     res.json({ total: activeSessions.length, sessions: activeSessions });
 });
 
-app.listen(PORT, async () => {
+// Écoute sur '0.0.0.0' pour l'affichage correct du port par l'hébergeur
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`▉ KAYA WEB SERVER is running on port ${PORT}`);
     watchPairingRequests();
     await restoreSessions();
