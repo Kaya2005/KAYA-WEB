@@ -4,13 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import localtunnel from 'localtunnel';
-import mongoose from 'mongoose';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -18,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({
     origin: 'https://kaya-bot-drab.vercel.app',
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Bypass-Tunnel-Reminders']
+    allowedHeaders: ['Content-Type']
 }));
 
 app.use(express.json());
@@ -29,21 +25,7 @@ if (!fs.existsSync(pairingFolder)) {
     fs.mkdirSync(pairingFolder, { recursive: true });
 }
 
-// Schéma Mongoose pour stocker dynamiquement l'URL du tunnel
-const TunnelSchema = new mongoose.Schema({ url: String });
-const TunnelModel = mongoose.model('Tunnel', TunnelSchema);
-
 // ================= ROUTES API =================
-
-// Route pour que le front-end sur Vercel récupère l'URL active automatiquement
-app.get('/api/get-url', async (req, res) => {
-    try {
-        const config = await TunnelModel.findOne({});
-        res.json({ url: config ? config.url : '' });
-    } catch (e) {
-        res.json({ url: '' });
-    }
-});
 
 app.post('/api/connect', async (req, res) => {
     try {
@@ -95,28 +77,8 @@ app.get('/api/listpair', (req, res) => {
     res.json({ total: activeSessions.length, sessions: activeSessions });
 });
 
-// Écoute sur '0.0.0.0' et lancement automatique du tunnel HTTPS
-app.listen(PORT, '0.0.0.0', async () => {
+app.listen(PORT, async () => {
     console.log(`▉ KAYA WEB SERVER is running on port ${PORT}`);
     watchPairingRequests();
     await restoreSessions();
-
-    try {
-        const tunnel = await localtunnel({ port: PORT });
-        console.log(`🚀 URL HTTPS sécurisée : ${tunnel.url}`);
-        
-        // Sauvegarde automatique de la nouvelle URL dans MongoDB
-        await TunnelModel.findOneAndUpdate(
-            {}, 
-            { url: tunnel.url }, 
-            { upsert: true, new: true }
-        );
-        console.log('💾 URL dynamique sauvegardée en base de données avec succès !');
-
-        tunnel.on('close', () => {
-            console.log('⚠️ Le tunnel Localtunnel a été fermé.');
-        });
-    } catch (error) {
-        console.error('Erreur lors de la création du tunnel HTTPS :', error);
-    }
 });
