@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import localtunnel from 'localtunnel';
+import mongoose from 'mongoose';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({
     origin: 'https://kaya-bot-drab.vercel.app',
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'Bypass-Tunnel-Reminders']
 }));
 
 app.use(express.json());
@@ -28,7 +29,21 @@ if (!fs.existsSync(pairingFolder)) {
     fs.mkdirSync(pairingFolder, { recursive: true });
 }
 
+// Schéma Mongoose pour stocker dynamiquement l'URL du tunnel
+const TunnelSchema = new mongoose.Schema({ url: String });
+const TunnelModel = mongoose.model('Tunnel', TunnelSchema);
+
 // ================= ROUTES API =================
+
+// Route pour que le front-end sur Vercel récupère l'URL active automatiquement
+app.get('/api/get-url', async (req, res) => {
+    try {
+        const config = await TunnelModel.findOne({});
+        res.json({ url: config ? config.url : '' });
+    } catch (e) {
+        res.json({ url: '' });
+    }
+});
 
 app.post('/api/connect', async (req, res) => {
     try {
@@ -88,8 +103,16 @@ app.listen(PORT, '0.0.0.0', async () => {
 
     try {
         const tunnel = await localtunnel({ port: PORT });
-        console.log(`🚀 URL HTTPS sécurisée (à copier dans Vercel) : ${tunnel.url}`);
+        console.log(`🚀 URL HTTPS sécurisée : ${tunnel.url}`);
         
+        // Sauvegarde automatique de la nouvelle URL dans MongoDB
+        await TunnelModel.findOneAndUpdate(
+            {}, 
+            { url: tunnel.url }, 
+            { upsert: true, new: true }
+        );
+        console.log('💾 URL dynamique sauvegardée en base de données avec succès !');
+
         tunnel.on('close', () => {
             console.log('⚠️ Le tunnel Localtunnel a été fermé.');
         });
