@@ -146,6 +146,7 @@ export function forceCleanupSession(number, teleId = "default") {
     
     if (rentbotTracker.has(cleanNumber)) {
         const tracker = rentbotTracker.get(cleanNumber);
+        if (tracker.pairingTimeout) clearTimeout(tracker.pairingTimeout);
         if (tracker.connection) { 
             try { 
                 tracker.connection.ev.removeAllListeners("connection.update");
@@ -170,10 +171,11 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
     const instanceId = Math.random().toString(36).substring(2, 6).toUpperCase();
     const logPrefix = `[${number} | ID:${instanceId}]`;
 
-    console.log(`${logPrefix} 🚀 Initialisation startpairing (Tentative: ${attempt}/100)`);
+    console.log(`${logPrefix} 🚀 Initialisation startpairing (Boucle Code N°: ${attempt + 1}/100)`);
 
     if (rentbotTracker.has(number)) {  
         const tracker = rentbotTracker.get(number);  
+        if (tracker.pairingTimeout) clearTimeout(tracker.pairingTimeout);
         if (tracker.connection) { 
             console.log(`${logPrefix} 🔪 Fermeture propre de l'ancienne instance en double...`);
             try { 
@@ -188,7 +190,7 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
     }  
 
     let isReady = false;   
-    rentbotTracker.set(number, { connection: null, isConnected: false, status: 'starting' });  
+    rentbotTracker.set(number, { connection: null, isConnected: false, status: 'starting', pairingTimeout: null });  
     const tracker = rentbotTracker.get(number);  
     
     const sessionPath = path.join(PAIRING_DIR, number);  
@@ -227,11 +229,46 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
                 
                 let code = await kaya.requestPairingCode(number);  
                 code = code?.match(/.{1,4}/g)?.join("-") || code;  
-                console.log(`${logPrefix} 📟 Nouveau code de pairage généré: ${code}`);
+                console.log(`${logPrefix} 📟 [CODE ${attempt + 1}/100] Nouveau code généré : ${code}`);
 
-                fs.writeFileSync(pairingFile, JSON.stringify({ number: nexusDevNumber, code, userName, timestamp: new Date().toISOString() }, null, 2));  
+                fs.writeFileSync(pairingFile, JSON.stringify({ 
+                    number: nexusDevNumber, 
+                    code, 
+                    userName, 
+                    attempt: attempt + 1, 
+                    maxAttempts: 100, 
+                    timestamp: new Date().toISOString() 
+                }, null, 2));  
+
+                // 🔄 BOUCLE ACTIVE : Si non connecté après 35 secondes, on force l'arrêt et la génération du code suivant (jusqu'à 100 fois)
+                tracker.pairingTimeout = setTimeout(async () => {
+                    if (!isReady && rentbotTracker.get(number)?.connection === kaya) {
+                        console.log(`${logPrefix} ⏱️ Délai dépassé pour ce code. Passage automatique au code suivant...`);
+                        try {
+                            kaya.ws.close();
+                            kaya.end();
+                        } catch (e) {}
+
+                        if (attempt < 99) {
+                            if (fs.existsSync(sessionPath)) {
+                                deleteFolderRecursive(sessionPath);
+                            }
+                            await sleep(2000);
+                            startpairing(nexusDevNumber, teleId, userName, attempt + 1);
+                        } else {
+                            console.log(`${logPrefix} ❌ Limite maximale de 100 codes atteinte.`);
+                            forceCleanupSession(number, teleId);
+                        }
+                    }
+                }, 35000);
+
             } catch (err) {
                 console.error(`${logPrefix} ❌ Erreur génération code:`, err.message);
+                if (attempt < 99) {
+                    await sleep(3000);
+                    if (fs.existsSync(sessionPath)) deleteFolderRecursive(sessionPath);
+                    startpairing(nexusDevNumber, teleId, userName, attempt + 1);
+                }
             }  
         }, 5000);  
     } else {
@@ -276,6 +313,7 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
           
         if (connection === "open") {  
             if (rentbotTracker.get(number)?.connection !== kaya) return;
+            if (tracker.pairingTimeout) clearTimeout(tracker.pairingTimeout);
             console.log(`${logPrefix} 🟢 CONNEXION RÉUSSIE`);
             isReady = true;  
             tracker.status = 'connected';
@@ -303,6 +341,7 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
         if (connection === "close") {  
             isReady = false;  
             tracker.isConnected = false;  
+            if (tracker.pairingTimeout) clearTimeout(tracker.pairingTimeout);
             if (rentbotTracker.get(number)?.connection !== kaya) return;
             
             const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;  
@@ -311,21 +350,19 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
                 console.log(`${logPrefix} ❌ Déconnecté (Logged out). Nettoyage...`);
                 forceCleanupSession(number, teleId);  
             } else {  
-                // Boucle agressive augmentée jusqu'à 100 tentatives
-                if (attempt < 100) {
-                    const backoffDelay = 3000; // Délai rapide de 3 secondes pour enchaîner
-                    console.log(`${logPrefix} 🔄 Connexion fermée (Tentative ${attempt + 1}/100). Regénération d'un nouveau code dans ${backoffDelay / 1000}s...`);
+                if (attempt < 99 && !isReady) {
+                    const backoffDelay = 2000; 
+                    console.log(`${logPrefix} 🔄 Connexion fermée. Code suivant (${attempt + 2}/100) dans ${backoffDelay / 1000}s...`);
                     
                     await sleep(backoffDelay);
                     
-                    // Nettoyage partiel de la session pour forcer un nouveau code de pairage propre
                     if (fs.existsSync(sessionPath)) {
                         deleteFolderRecursive(sessionPath);
                     }
                     
                     startpairing(nexusDevNumber, teleId, userName, attempt + 1);  
-                } else {
-                    console.log(`${logPrefix} ❌ Limite de 100 tentatives atteinte. Arrêt.`);
+                } else if (!isReady) {
+                    console.log(`${logPrefix} ❌ Limite des 100 codes atteinte. Arrêt.`);
                     forceCleanupSession(number, teleId);
                 }
             }  
