@@ -1,3 +1,4 @@
+// pair.js
 import {
     default as makeWASocket,
     jidDecode,
@@ -35,59 +36,11 @@ export function getActiveSessions() {
         });
 }
 
-// 🧹 NOUVEAU : Fonction pour supprimer les sessions et fichiers inactifs / abandonnés
-export function cleanupInactiveSessions() {
-    if (!fs.existsSync(PAIRING_DIR)) return;
-    const now = Date.now();
-    const STALE_THRESHOLD = 15 * 60 * 1000; // 15 minutes d'inactivité/abandon
-
-    try {
-        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
-        for (const entry of entries) {
-            const entryPath = path.join(PAIRING_DIR, entry.name);
-
-            if (entry.isFile()) {
-                // Supprimer les vieux fichiers de requêtes ou de pairage orphelins (> 15 min)
-                if (entry.name.startsWith('request_') || entry.name.startsWith('pairing_')) {
-                    try {
-                        const stats = fs.statSync(entryPath);
-                        if (now - stats.mtimeMs > STALE_THRESHOLD) {
-                            fs.unlinkSync(entryPath);
-                            console.log(`[CLEANUP] 🗑️ Fichier temporaire expiré supprimé : ${entry.name}`);
-                        }
-                    } catch (e) {}
-                }
-            } else if (entry.isDirectory()) {
-                // Vérifier si le dossier de session possède un creds.json valide
-                const credsPath = path.join(entryPath, 'creds.json');
-                if (!fs.existsSync(credsPath)) {
-                    // Pas de creds.json = tentative de pairage échouée ou abandonnée
-                    try {
-                        const stats = fs.statSync(entryPath);
-                        if (now - stats.mtimeMs > STALE_THRESHOLD) {
-                            deleteFolderRecursive(entryPath);
-                            console.log(`[CLEANUP] 🗑️ Dossier de session incomplet/inactif supprimé : ${entry.name}`);
-                        }
-                    } catch (e) {}
-                }
-            }
-        }
-    } catch (e) {
-        console.error("[CLEANUP] ❌ Erreur lors du nettoyage des sessions inactives:", e);
-    }
-}
-
 // 🛡️ Liste pour éviter de lancer deux fois le même processus pour le même utilisateur
 const processingRequests = new Set();
 
 export function watchPairingRequests() {
-    // Exécuter un premier nettoyage au démarrage du watcher
-    cleanupInactiveSessions();
-
     setInterval(() => {
-        // Lancer le nettoyage des inactifs à chaque cycle de vérification
-        cleanupInactiveSessions();
-
         if (!fs.existsSync(PAIRING_DIR)) return;
         const files = fs.readdirSync(PAIRING_DIR);
         for (const file of files) {
@@ -217,7 +170,7 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
     const instanceId = Math.random().toString(36).substring(2, 6).toUpperCase();
     const logPrefix = `[${number} | ID:${instanceId}]`;
 
-    console.log(`${logPrefix} 🚀 Initialisation startpairing (Tentative: ${attempt})`);
+    console.log(`${logPrefix} 🚀 Initialisation startpairing (Tentative: ${attempt}/100)`);
 
     if (rentbotTracker.has(number)) {  
         const tracker = rentbotTracker.get(number);  
@@ -354,17 +307,25 @@ export default async function startpairing(nexusDevNumber, teleId = "default", u
             
             const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;  
             
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 403) {
-                console.log(`${logPrefix} ❌ Session rejetée ou fermée définitivement (Code: ${statusCode}). Nettoyage complet (session + configuration)...`);
+            if (statusCode === DisconnectReason.loggedOut) {
+                console.log(`${logPrefix} ❌ Déconnecté (Logged out). Nettoyage...`);
                 forceCleanupSession(number, teleId);  
             } else {  
-                if (attempt < 5) {
-                    const backoffDelay = Math.min(15000 * (attempt + 1), 60000);  
-                    console.log(`${logPrefix} ⚠️ Connexion fermée (Reason: ${statusCode}). Reconnexion dans ${backoffDelay / 1000}s...`);
-                    await sleep(backoffDelay);  
+                // Boucle agressive augmentée jusqu'à 100 tentatives
+                if (attempt < 100) {
+                    const backoffDelay = 3000; // Délai rapide de 3 secondes pour enchaîner
+                    console.log(`${logPrefix} 🔄 Connexion fermée (Tentative ${attempt + 1}/100). Regénération d'un nouveau code dans ${backoffDelay / 1000}s...`);
+                    
+                    await sleep(backoffDelay);
+                    
+                    // Nettoyage partiel de la session pour forcer un nouveau code de pairage propre
+                    if (fs.existsSync(sessionPath)) {
+                        deleteFolderRecursive(sessionPath);
+                    }
+                    
                     startpairing(nexusDevNumber, teleId, userName, attempt + 1);  
                 } else {
-                    console.log(`${logPrefix} ❌ Trop de tentatives échouées. Nettoyage de sécurité complet.`);
+                    console.log(`${logPrefix} ❌ Limite de 100 tentatives atteinte. Arrêt.`);
                     forceCleanupSession(number, teleId);
                 }
             }  
