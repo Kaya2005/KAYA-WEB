@@ -4,17 +4,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import localtunnel from 'localtunnel';
+import mongoose from 'mongoose';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuration CORS sécurisée avec ton domaine Vercel
+// 🌐 Configuration CORS pour autoriser ton site sur Vercel
 app.use(cors({
-    origin: 'https://kaya-bot-drab.vercel.app',
+    origin: ['https://kaya-bot-drab.vercel.app', '*'],
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'Bypass-Tunnel-Reminders']
 }));
 
 app.use(express.json());
@@ -25,8 +29,23 @@ if (!fs.existsSync(pairingFolder)) {
     fs.mkdirSync(pairingFolder, { recursive: true });
 }
 
+// Schéma Mongoose pour enregistrer l'URL dynamique du tunnel (si tu utilises localtunnel)
+const TunnelSchema = new mongoose.Schema({ url: String });
+const TunnelModel = mongoose.model('Tunnel', TunnelSchema);
+
 // ================= ROUTES API =================
 
+// Route appelée par Vercel pour récupérer l'URL active du serveur
+app.get('/api/get-url', async (req, res) => {
+    try {
+        const config = await TunnelModel.findOne({});
+        res.json({ url: config ? config.url : '' });
+    } catch (e) {
+        res.json({ url: '' });
+    }
+});
+
+// Route de pairage connectée à ton code pair.js
 app.post('/api/connect', async (req, res) => {
     try {
         const { phone } = req.body;
@@ -77,8 +96,28 @@ app.get('/api/listpair', (req, res) => {
     res.json({ total: activeSessions.length, sessions: activeSessions });
 });
 
-app.listen(PORT, async () => {
+// Démarrage du serveur sur le Panel
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`▉ KAYA WEB SERVER is running on port ${PORT}`);
     watchPairingRequests();
     await restoreSessions();
+
+    try {
+        // Lancement du tunnel HTTPS pour communiquer avec Vercel en toute sécurité
+        const tunnel = await localtunnel({ port: PORT });
+        console.log(`🚀 URL HTTPS sécurisée : ${tunnel.url}`);
+        
+        await TunnelModel.findOneAndUpdate(
+            {}, 
+            { url: tunnel.url }, 
+            { upsert: true, new: true }
+        );
+        console.log('💾 URL dynamique sauvegardée en base de données avec succès !');
+
+        tunnel.on('close', () => {
+            console.log('⚠️ Le tunnel Localtunnel a été fermé.');
+        });
+    } catch (error) {
+        console.error('Erreur lors de la création du tunnel HTTPS :', error);
+    }
 });
