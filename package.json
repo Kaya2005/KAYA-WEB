@@ -36,7 +36,7 @@
     "chalk": "^4.1.2",
     "chalk-animation": "^2.0.3",
     "cheerio": "^1.0.0",
-    "cloudflared": "^6.0.0",
+  "cloudflared": "latest",
     "cloudscraper": "^4.6.0",
     "cookie": "^0.5.0",
     "cors": "^2.8.5",
