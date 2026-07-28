@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import localtunnel from 'localtunnel';
+import { tunnel } from 'cloudflared'; // 📦 Remplacement de localtunnel par cloudflared
 import mongoose from 'mongoose';
 import { watchPairingRequests, restoreSessions, getActiveSessions } from './pair.js'; 
 
@@ -29,7 +29,7 @@ if (!fs.existsSync(pairingFolder)) {
     fs.mkdirSync(pairingFolder, { recursive: true });
 }
 
-// Schéma Mongoose pour enregistrer l'URL dynamique du tunnel (si tu utilises localtunnel)
+// Schéma Mongoose pour enregistrer l'URL dynamique du tunnel
 const TunnelSchema = new mongoose.Schema({ url: String });
 const TunnelModel = mongoose.model('Tunnel', TunnelSchema);
 
@@ -103,21 +103,18 @@ app.listen(PORT, '0.0.0.0', async () => {
     await restoreSessions();
 
     try {
-        // Lancement du tunnel HTTPS pour communiquer avec Vercel en toute sécurité
-        const tunnel = await localtunnel({ port: PORT });
-        console.log(`🚀 URL HTTPS sécurisée : ${tunnel.url}`);
+        // 🚀 Lancement du tunnel Cloudflare HTTPS ultra-stable
+        const cloudflareTunnel = await tunnel({ url: `http://localhost:${PORT}` });
+        const tunnelUrl = await cloudflareTunnel.url;
+        console.log(`🚀 URL Cloudflare HTTPS sécurisée : ${tunnelUrl}`);
         
         await TunnelModel.findOneAndUpdate(
             {}, 
-            { url: tunnel.url }, 
+            { url: tunnelUrl }, 
             { upsert: true, new: true }
         );
         console.log('💾 URL dynamique sauvegardée en base de données avec succès !');
-
-        tunnel.on('close', () => {
-            console.log('⚠️ Le tunnel Localtunnel a été fermé.');
-        });
     } catch (error) {
-        console.error('Erreur lors de la création du tunnel HTTPS :', error);
+        console.error('Erreur lors de la création du tunnel Cloudflare :', error);
     }
 });
