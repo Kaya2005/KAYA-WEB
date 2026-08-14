@@ -1,13 +1,18 @@
 {
-  "name": "kaya-bot",
+  "name": "KAYA BOT",
   "version": "1.0.0",
   "description": "KAYA BOT",
   "type": "module",
-  "main": "bot.js",
+  "imports": {
+    "#db": "./lib/db.js",
+    "#serialize": "./lib/serialize.js"
+  },
+  "main": "index.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js",
-    "test": "node --check bot.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "bot": "node bot.js",
+    "test": "node --check index.js"
   },
   "keywords": [
     "whiskeysockets",
@@ -36,15 +41,12 @@
     "chalk": "^4.1.2",
     "chalk-animation": "^2.0.3",
     "cheerio": "^1.0.0",
-  "cloudflared": "latest",
     "cloudscraper": "^4.6.0",
     "cookie": "^0.5.0",
-    "cors": "^2.8.5",
     "d-scrape": "^1.2.0",
     "dhn-api": "^1.1.3",
     "didyoumean": "^1.2.2",
     "dotenv": "^16.4.7",
-    "express": "^4.19.2",
     "fake-useragent": "^1.0.1",
     "figlet": "^1.7.0",
     "file-type": "^16.5.4",
@@ -55,6 +57,7 @@
     "g-i-s": "^2.1.6",
     "google-it": "^1.6.4",
     "google-tts-api": "^2.0.2",
+    "gtts": "latest",
     "got": "^11.8.6",
     "gradient-string": "^2.0.2",
     "header-generator": "^2.1.54",
@@ -63,7 +66,6 @@
     "jimp": "^1.6.0",
     "jsdom": "^25.0.1",
     "link-preview-js": "^3.0.5",
-    "localtunnel": "^2.0.2",
     "lodash": "^4.17.21",
     "lowdb": "^2.1.0",
     "mal-scraper": "^2.11.4",
