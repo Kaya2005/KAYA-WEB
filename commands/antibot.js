@@ -13,32 +13,46 @@ export default {
   group: true,
 
   async execute(kaya, mek, from, args, prefix) {
-    const action = args[0]?.toLowerCase();
-    const groupId = from.split('@')[0];
-    const ownerId = kaya.user.id.split(':')[0];
-    
-    if (!["on", "off", "delete", "warn", "kick", "status"].includes(action)) {
-        return await kaya.sendMessage(from, { 
-            text: `🛡️ *ANTIBOT MENU*\n\n${prefix}antibot on (Default: warn)\n${prefix}antibot delete\n${prefix}antibot warn\n${prefix}antibot kick\n${prefix}antibot off\n${prefix}antibot status` 
-        }, { quoted: mek });
-    }
+    try {
+      const action = args[0]?.toLowerCase();
+      const groupId = from.split('@')[0];
+      const ownerId = kaya.user.id.split(':')[0];
+      
+      if (!["on", "off", "delete", "warn", "kick", "status"].includes(action)) {
+          const menuText = `🛡️ *MENU DE PROTECTION ANTIBOT*\n\n` +
+                           `Configurez la sécurité de votre groupe avec les commandes suivantes :\n\n` +
+                           `📌 *${prefix}antibot on* (Active par défaut en mode warn)\n` +
+                           `🗑️ *${prefix}antibot delete* (Supprime uniquement)\n` +
+                           `⚠️ *${prefix}antibot warn* (Avertit puis exclut)\n` +
+                           `🚫 *${prefix}antibot kick* (Exclut directement)\n` +
+                           `📊 *${prefix}antibot status* (Vérifie l'état)\n` +
+                           `❌ *${prefix}antibot off* (Désactive l'anti-bot)`;
 
-    if (action === "status") {
-        const isEnabled = getSetting(ownerId, "antibot", false, groupId);
-        const mode = getSetting(ownerId, "antibotMode", "warn", groupId);
-        return await kaya.sendMessage(from, { text: !isEnabled ? "❌ Anti-bot is Disabled" : `✅ Anti-bot is Enabled\nMode: *${mode.toUpperCase()}*` }, { quoted: mek });
-    }
+          return await kaya.sendMessage(from, { text: menuText }, { quoted: mek });
+      }
 
-    if (action === "off") {
-      setSetting(ownerId, "antibot", false, groupId);
-      return await kaya.sendMessage(from, { text: "❌ Anti-bot disabled." }, { quoted: mek });
-    }
+      if (action === "status") {
+          const isEnabled = getSetting(ownerId, "antibot", false, groupId);
+          const mode = getSetting(ownerId, "antibotMode", "warn", groupId);
+          return await kaya.sendMessage(from, { 
+              text: !isEnabled ? "❌ L'Anti-bot est désactivé sur ce groupe." : `✅ L'Anti-bot est activé\nMode actuel : *${mode.toUpperCase()}*` 
+          }, { quoted: mek });
+      }
 
-    const mode = action === "on" ? "warn" : action;
-    setSetting(ownerId, "antibot", true, groupId);
-    setSetting(ownerId, "antibotMode", mode, groupId);
-    
-    await kaya.sendMessage(from, { text: `✅ Anti-bot enabled with mode: *${mode.toUpperCase()}*` }, { quoted: mek });
+      if (action === "off") {
+        setSetting(ownerId, "antibot", false, groupId);
+        return await kaya.sendMessage(from, { text: "❌ Anti-bot désactivé avec succès." }, { quoted: mek });
+      }
+
+      const mode = action === "on" ? "warn" : action;
+      setSetting(ownerId, "antibot", true, groupId);
+      setSetting(ownerId, "antibotMode", mode, groupId);
+      
+      await kaya.sendMessage(from, { text: `✅ Anti-bot activé avec succès !\nMode configuré : *${mode.toUpperCase()}*` }, { quoted: mek });
+    } catch (err) {
+      console.error("❌ Erreur dans la commande antibot:", err);
+      await kaya.sendMessage(from, { text: "❌ Une erreur est survenue lors de l'exécution de la commande antibot." }, { quoted: mek }).catch(() => {});
+    }
   },
 
   async detect(kaya, mek, from) {
@@ -67,10 +81,10 @@ export default {
 
         // 2. Gestion des modes avec délais de sécurité
         if (mode === "kick") {
-          await delay(1200); // Délai avant le kick
+          await delay(1200);
           await kaya.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
           await kaya.sendMessage(from, { 
-            text: `🚫 @${sender.split('@')[0]} removed for bot-like activity.`, 
+            text: `🚫 @${sender.split('@')[0]} a été expulsé pour activité suspecte de bot.`, 
             mentions: [sender] 
           });
         } else if (mode === "warn") {
@@ -79,20 +93,20 @@ export default {
           setSetting(ownerId, `warn_bot_${sender}`, newWarns, groupId);
 
           if (newWarns >= 4) {
-            await delay(1200); // Délai avant le kick final
-            await kaya.groupParticipantsUpdate(from, [sender], "remove");
-            await kaya.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} reached 4/4 warns and was kicked for bot activity.`, mentions: [sender] });
+            await delay(1200);
+            await kaya.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
+            await kaya.sendMessage(from, { text: `🚫 @${sender.split('@')[0]} a atteint 4/4 avertissements et a été expulsé.`, mentions: [sender] });
             setSetting(ownerId, `warn_bot_${sender}`, 0, groupId);
           } else {
             await kaya.sendMessage(from, { 
-              text: `⚠️ ANTI-BOT WARNING\nUser: @${sender.split('@')[0]}\nWarn: ${newWarns}/4`, 
+              text: `⚠️ AVERTISSEMENT ANTI-BOT\nUtilisateur : @${sender.split('@')[0]}\nAvertissement : ${newWarns}/4`, 
               mentions: [sender] 
             });
           }
         }
       }
     } catch (err) {
-      console.error("❌ AntiBot detect error:", err);
+      console.error("❌ Erreur dans la détection AntiBot:", err);
     }
   }
 };

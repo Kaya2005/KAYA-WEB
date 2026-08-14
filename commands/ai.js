@@ -1,73 +1,118 @@
-import axios from 'axios';
-import { getContextInfo } from '../setting/contextInfo.js';
-// Si tu as un fichier config, importe-le ici
-// import config from '../config.js'; 
+import fetch from 'node-fetch';
+import { getSetting, setSetting } from '../setting.js';
 
 export default {
     name: 'ai',
-    aliases: ['gpt', 'ask', 'chatgpt'],
-    category: 'ai',
-    description: 'Ask the AI anything',
-    usage: '.ai <your question>',
+    description: '🤖 Ask a question to the artificial intelligence (Groq)',
+    category: 'AI',
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            const question = args.join(' ');
-            
-            // 1. Vérification de l'argument
-            if (!question) {
-                return await kaya.sendMessage(from, { 
-                    text: `❌ Please provide a question.\nExample: \`${prefix}ai How to code in Node.js?\`` 
-                }, { quoted: mek });
-            }
+            // 1. Clean retrieval of the bot ID
+            const botId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
 
-            // 2. Réaction "en cours"
-            // Note: Si extra.react n'est pas dispo, utilise: kaya.sendMessage(from, { react: { text: '⏳', key: mek.key }})
-            if (typeof extra !== 'undefined' && extra.react) {
-                await extra.react('⏳');
-            } else {
-                await kaya.sendMessage(from, { text: '⏳ *Thinking...*' }, { quoted: mek });
-            }
+            // 2. Correct identification of the sender
+            const senderJid = mek.sender || mek.key.participant || mek.key.remoteJid || '';
+            const senderId = senderJid.split(':')[0].replace(/[^0-9]/g, '');
 
-            // 3. Appel API
-            const apiUrl = 'https://api.giftedtech.co.ke/api/ai/gpt4o';
-            const params = {
-                apikey: 'gifted', // Remplace par ta clé API si besoin
-                q: question
-            };
+            // 3. Check if the sender is the owner
+            const isOwner = senderId === botId;
 
-            const response = await axios.get(apiUrl, { params, timeout: 30000 });
+            // 4. Handle key registration
+            if (args[0] === 'setkey') {
+                if (!isOwner) {
+                    return await kaya.sendMessage(from, { 
+                        text: `*❌ Only the owner of this bot can configure the API key.*` 
+                    }, { quoted: mek });
+                }
 
-            // 4. Traitement de la réponse
-            if (response.data && response.data.success && response.data.result) {
-                const answer = response.data.result;
+                const customKey = args[1];
+                if (!customKey) {
+                    return await kaya.sendMessage(from, { 
+                        text: `*❌ Please provide your Groq API key.*\n\nExample: \`${prefix}ai setkey gsk_...\`` 
+                    }, { quoted: mek });
+                }
                 
-                await kaya.sendMessage(from, { 
-                    text: answer,
-                    contextInfo: getContextInfo() // Ajout de ton contexte personnalisé
+                await setSetting(botId, 'ai_api_key', customKey);
+                return await kaya.sendMessage(from, { 
+                    text: `*✅ Groq API key successfully registered for your bot!*` 
                 }, { quoted: mek });
-            } else {
-                await kaya.sendMessage(from, { text: '❌ AI service returned an unexpected response.' }, { quoted: mek });
             }
 
-            // 5. Réaction de fin
-            if (typeof extra !== 'undefined' && extra.react) {
-                await extra.react('✅');
+            // 5. Handle key deletion
+            if (args[0] === 'delkey') {
+                if (!isOwner) {
+                    return await kaya.sendMessage(from, { 
+                        text: `*❌ Only the owner of this bot can delete this configuration.*` 
+                    }, { quoted: mek });
+                }
+
+                await setSetting(botId, 'ai_api_key', null);
+                return await kaya.sendMessage(from, { 
+                    text: `*🗑️ Custom API key deleted.*` 
+                }, { quoted: mek });
             }
-            
-        } catch (error) {
-            console.error('AI command error:', error.message);
-            
-            let errorMsg = '❌ Failed to get a response from AI.';
-            if (error.code === 'ECONNABORTED') errorMsg = '❌ Request timed out. Please try again later.';
-            else if (error.response) errorMsg = `❌ API error: ${error.response.status}`;
-            
-            await kaya.sendMessage(from, { text: errorMsg }, { quoted: mek });
-            
-            // Réaction d'erreur
-            if (typeof extra !== 'undefined' && extra.react) {
-                await extra.react('❌').catch(() => {});
+
+            // 6. Check if the key is configured
+            const ownerApiKey = getSetting(botId, 'ai_api_key', null);
+
+            if (!ownerApiKey) {
+                if (isOwner) {
+                    const guideText = `*⚠️ Groq API Key Not Configured*\n\n` +
+                        `As the owner, you must configure a free Groq API key to activate the assistant.\n\n` +
+                        `🌐 *How to generate your free API key:*\n` +
+                        `1. Go to [Groq Console](https://console.groq.com/)\n` +
+                        `2. Log in (Google or GitHub account).\n` +
+                        `3. Go to **API Keys** and create a new key (\`gsk_...\`).\n` +
+                        `4. Copy the key.\n\n` +
+                        `⚙️ *Save it in the bot using the command:*\n` +
+                        `\`${prefix}ai setkey <your_key>\``;
+
+                    return await kaya.sendMessage(from, { text: guideText }, { quoted: mek });
+                } else {
+                    return await kaya.sendMessage(from, { 
+                        text: `*❌ The owner has not configured their AI API yet.*` 
+                    }, { quoted: mek });
+                }
             }
+
+            const text = args.join(' ').trim();
+
+            if (!text) {
+                return await kaya.sendMessage(from, { 
+                    text: `*❌ Incorrect usage.*\n\nExample: \`${prefix}ai What is Node.js?\`` 
+                }, { quoted: mek });
+            }
+
+            // Use Groq API (Llama 3.3 Model)
+            const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ownerApiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'llama-3.3-70b-versatile',
+                    messages: [
+                        { role: 'user', content: text }
+                    ]
+                })
+            });
+
+            const json = await apiResponse.json();
+            
+            let answer = "";
+            if (json.choices && json.choices[0]?.message?.content) {
+                answer = json.choices[0].message.content;
+            } else {
+                answer = json.error?.message || "Sorry, an error occurred while communicating with the AI.";
+            }
+
+            await kaya.sendMessage(from, { text: answer }, { quoted: mek });
+
+        } catch (err) {
+            console.error('❌ Error in ai.js :', err);
+            await kaya.sendMessage(from, { text: '⚠️ An error occurred while communicating with the artificial intelligence.' }, { quoted: mek });
         }
     }
 };
