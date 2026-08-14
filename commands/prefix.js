@@ -6,7 +6,7 @@ import { getContextInfo } from '../setting/contextInfo.js';
 export default {
   name: 'prefix',
   description: 'Change or display the bot prefix',
-  category: 'Owner',
+  category: 'System',
   ownerOnly: true,
 
   async execute(kaya, mek, from, args, prefix) {
@@ -32,7 +32,7 @@ ______________________
 💡 *Usage:* \`${prefix}prefix <new_prefix>\`
 `.trim();
 
-        return await sendWithBotImage(kaya, from, mek.sender, { caption, contextInfo: getContextInfo() });
+        return await sendWithBotImage(kaya, from, mek.sender, { caption, contextInfo: getContextInfo(mek.sender) });
       }
 
       // ================= SET PREFIX =================
@@ -54,7 +54,7 @@ ______________________
 New prefix set to: \`${newPrefix}\`
 `.trim();
 
-      return await sendWithBotImage(kaya, from, mek.sender, { caption, contextInfo: getContextInfo() });
+      return await sendWithBotImage(kaya, from, mek.sender, { caption, contextInfo: getContextInfo(mek.sender) });
 
     } catch (err) {
       console.error('❌ prefix.js error:', err);

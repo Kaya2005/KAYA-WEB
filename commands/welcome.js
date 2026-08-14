@@ -1,4 +1,3 @@
-//welcome.js
 import fs from 'fs';
 import path from 'path';
 import { getContextInfo } from '../setting/contextInfo.js';
@@ -19,34 +18,38 @@ export default {
     async execute(kaya, mek, from, args, prefix) {
         try {
             const status = await checkAdminOrOwner(kaya, from, mek.sender);
-            if (!status.isBotOwner) return kaya.sendMessage(from, { text: '❌ Owner Only', contextInfo: getContextInfo() }, { quoted: mek });
+            if (!status.isBotOwner) return kaya.sendMessage(from, { text: '❌ Owner Only', contextInfo: getContextInfo(mek.sender) }, { quoted: mek });
             
             const action = args[0]?.toLowerCase();
             const ownerId = kaya.user.id.split(':')[0];
             const groupId = from.split('@')[0];
 
-            if (!action) return kaya.sendMessage(from, { text: `⚙️ *WELCOME SETTINGS*\n\n${prefix}welcome on (Current group)\n${prefix}welcome off (Current group)\n${prefix}welcome all (Global)\n${prefix}welcome alloff (Disable global)\n${prefix}welcome status`, contextInfo: getContextInfo() }, { quoted: mek });
+            if (!action) return kaya.sendMessage(from, { text: `⚙️ *WELCOME SETTINGS*\n\n${prefix}welcome on (Current group)\n${prefix}welcome off (Current group)\n${prefix}welcome all (Global)\n${prefix}welcome alloff (Disable global)\n${prefix}welcome status`, contextInfo: getContextInfo(mek.sender) }, { quoted: mek });
 
             if (action === "on") { 
                 setSetting(ownerId, 'welcomeEnabled', true, groupId); 
-                return kaya.sendMessage(from, { text: "✅ Welcome enabled for this group.", contextInfo: getContextInfo() }, { quoted: mek }); 
+                return kaya.sendMessage(from, { text: "✅ Welcome enabled for this group.", contextInfo: getContextInfo(mek.sender) }, { quoted: mek }); 
             }
             if (action === "off") { 
                 setSetting(ownerId, 'welcomeEnabled', false, groupId); 
-                return kaya.sendMessage(from, { text: "❌ Welcome disabled for this group.", contextInfo: getContextInfo() }, { quoted: mek }); 
+                return kaya.sendMessage(from, { text: "❌ Welcome disabled for this group.", contextInfo: getContextInfo(mek.sender) }, { quoted: mek }); 
             }
             if (action === "all") {
-                setSetting(ownerId, 'welcomeAll', true);
-                return kaya.sendMessage(from, { text: `✅ Welcome enabled globally for all your groups.`, contextInfo: getContextInfo() }, { quoted: mek });
+                setSetting(ownerId, 'welcomeAll', 'on');
+                return kaya.sendMessage(from, { text: `✅ Welcome enabled globally for all your groups.`, contextInfo: getContextInfo(mek.sender) }, { quoted: mek });
             }
             if (action === "alloff") {
-                setSetting(ownerId, 'welcomeAll', false);
-                return kaya.sendMessage(from, { text: `❌ Welcome disabled globally for all your groups.`, contextInfo: getContextInfo() }, { quoted: mek });
+                setSetting(ownerId, 'welcomeAll', 'off');
+                return kaya.sendMessage(from, { text: `❌ Welcome disabled globally for all your groups.`, contextInfo: getContextInfo(mek.sender) }, { quoted: mek });
             }
             if (action === "status") {
-                const isEnabled = getSetting(ownerId, 'welcomeEnabled', false, groupId);
-                const isAll = getSetting(ownerId, 'welcomeAll', false);
-                return kaya.sendMessage(from, { text: `📊 *WELCOME STATUS*\n\nLocal: ${isEnabled ? "ON" : "OFF"}\nGlobal (All): ${isAll ? "ON" : "OFF"}`, contextInfo: getContextInfo() }, { quoted: mek });
+                const isLocalEnabled = getSetting(ownerId, 'welcomeEnabled', false, groupId);
+                const isAll = getSetting(ownerId, 'welcomeAll', null);
+                let globalStatus = "NOT SET";
+                if (isAll === 'on') globalStatus = "ON";
+                if (isAll === 'off') globalStatus = "OFF";
+
+                return kaya.sendMessage(from, { text: `📊 *WELCOME STATUS*\n\nLocal: ${isLocalEnabled ? "ON" : "OFF"}\nGlobal (All): ${globalStatus}`, contextInfo: getContextInfo(mek.sender) }, { quoted: mek });
             }
         } catch (e) { console.error('❌ welcome.js error:', e); }
     },
@@ -59,7 +62,18 @@ export default {
             const groupId = from.split('@')[0];
             const ownerId = kaya.user.id.split(':')[0];
             
-            const isEnabled = getSetting(ownerId, 'welcomeEnabled', false, groupId) || getSetting(ownerId, 'welcomeAll', false);
+            // 🔍 Logique de priorité corrigée : Global 'off' prime sur tout, Global 'on' active partout, sinon on utilise le local
+            const isAll = getSetting(ownerId, 'welcomeAll', null);
+            let isEnabled = false;
+
+            if (isAll === 'on') {
+                isEnabled = true;
+            } else if (isAll === 'off') {
+                isEnabled = false; // Force l'arrêt global même si le réglage local était à true
+            } else {
+                isEnabled = getSetting(ownerId, 'welcomeEnabled', false, groupId);
+            }
+
             if (!isEnabled) return;
 
             const metadata = await kaya.groupMetadata(from).catch(() => ({}));
@@ -97,7 +111,7 @@ ______________________
                     image: { url: ppUrl },
                     caption: msg, 
                     mentions: [userId],
-                    contextInfo: getContextInfo() 
+                    contextInfo: getContextInfo(ownerId + '@s.whatsapp.net') 
                 });
             }
         } catch (e) { /* silent */ }
