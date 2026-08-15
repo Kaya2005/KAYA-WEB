@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import { spawn } from 'child_process';
 import { forceCleanupSession } from './pair.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,5 +103,24 @@ app.post('/api/connect', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Serveur Web API (bot.js) en écoute sur le port ${PORT}`);
-    console.log(`💡 Lance ta commande cloudflared dans ta console pour exposer ce port.`);
+
+    // Lancement automatique de Cloudflare Tunnel
+    const cloudflare = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${PORT}`]);
+
+    cloudflare.stderr.on('data', (data) => {
+        const output = data.toString();
+        const match = output.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+        if (match) {
+            console.log(`🌐 Tunnel Cloudflare actif : ${match[0]}`);
+            console.log(`💡 Copie cette URL HTTPS dans ton frontend Vercel (BACKEND_URL) !`);
+        }
+    });
+
+    cloudflare.on('error', (err) => {
+        console.error('❌ Erreur lors du lancement de Cloudflare Tunnel :', err.message);
+    });
+
+    cloudflare.on('close', (code) => {
+        console.log(`⚠️ Le tunnel Cloudflare s'est arrêté (code ${code})`);
+    });
 });
