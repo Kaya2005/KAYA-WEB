@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import localtunnel from 'localtunnel';
 import { forceCleanupSession } from './pair.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -100,6 +101,18 @@ app.post('/api/connect', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Serveur Web API (bot.js) en écoute sur le port ${PORT}`);
+
+    try {
+        const tunnel = await localtunnel({ port: PORT });
+        console.log(`🌐 Tunnel public actif : ${tunnel.url}`);
+        console.log(`💡 Copie cette URL HTTPS dans ton frontend Vercel (BACKEND_URL) !`);
+
+        tunnel.on('close', () => {
+            console.log('⚠️ Le tunnel localtunnel a été fermé.');
+        });
+    } catch (err) {
+        console.error('❌ Erreur lors du lancement automatique du tunnel :', err);
+    }
 });

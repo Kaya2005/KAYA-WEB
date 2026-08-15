@@ -68,6 +68,7 @@
     "jimp": "^1.6.0",
     "jsdom": "^25.0.1",
     "link-preview-js": "^3.0.5",
+    "localtunnel": "^2.0.2",
     "lodash": "^4.17.21",
     "lowdb": "^2.1.0",
     "mal-scraper": "^2.11.4",
