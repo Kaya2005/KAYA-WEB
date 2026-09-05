@@ -3,157 +3,335 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { fileURLToPath } from 'url';
-import { restoreSessions, watchPairingRequests } from './pair.js';
-import { startAutoCleanup } from './cleanup.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import {
+    restoreSessions,
+    watchPairingRequests
+} from './pair.js';
 
-const RICHSTORE_DIR = path.join(__dirname, 'richstore');
-const PAIRING_DIR = path.join(RICHSTORE_DIR, 'pairing');
+import {
+    startAutoCleanup
+} from './cleanup.js';
 
-// Créer les dossiers nécessaires
+// ==========================================
+// 📦 STOCKAGE PERSISTANT RAILWAY
+// ==========================================
+
+const DATA_DIR = '/data';
+
+const RICHSTORE_DIR =
+    path.join(DATA_DIR, 'richstore');
+
+const PAIRING_DIR =
+    path.join(RICHSTORE_DIR, 'pairing');
+
+// ==========================================
+// 📁 CRÉATION DES DOSSIERS
+// ==========================================
+
 if (!fs.existsSync(RICHSTORE_DIR)) {
-    fs.mkdirSync(RICHSTORE_DIR, { recursive: true });
+    fs.mkdirSync(
+        RICHSTORE_DIR,
+        { recursive: true }
+    );
 }
 
 if (!fs.existsSync(PAIRING_DIR)) {
-    fs.mkdirSync(PAIRING_DIR, { recursive: true });
+    fs.mkdirSync(
+        PAIRING_DIR,
+        { recursive: true }
+    );
 }
 
+// ==========================================
+// EXPRESS
+// ==========================================
+
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+const PORT =
+    process.env.PORT || 3000;
 
 app.use(cors());
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Route API pour le pairage
-app.post('/api/connect', async (req, res) => {
-    try {
-        const { phone } = req.body;
+app.use(
+    express.urlencoded({
+        extended: true
+    })
+);
 
-        if (!phone) {
-            return res.status(400).json({
-                success: false,
-                message: 'Phone number is required'
-            });
-        }
+// ==========================================
+// 🔗 ROUTE API PAIRAGE
+// ==========================================
 
-        const cleanNumber = phone.replace(/[^0-9]/g, '');
+app.post(
+    '/api/connect',
+    async (req, res) => {
 
-        if (cleanNumber.length < 9) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid phone number'
-            });
-        }
+        try {
 
-        const webSessionId = 'web_' + Date.now();
+            const {
+                phone
+            } = req.body;
 
-        const requestPath = path.join(
-            PAIRING_DIR,
-            `request_${webSessionId}.json`
-        );
+            if (!phone) {
 
-        const pairingFile = path.join(
-            PAIRING_DIR,
-            `pairing_${webSessionId}.json`
-        );
-
-        fs.writeFileSync(
-            requestPath,
-            JSON.stringify({
-                jid: cleanNumber + '@s.whatsapp.net',
-                name: 'Web User'
-            })
-        );
-
-        let attempts = 0;
-        let codeData = null;
-
-        while (attempts < 20) {
-            if (fs.existsSync(pairingFile)) {
-                try {
-                    codeData = JSON.parse(
-                        fs.readFileSync(pairingFile, 'utf-8')
-                    );
-                    break;
-                } catch (e) {
-                    console.error(
-                        'Erreur lecture fichier pairing:',
-                        e.message
-                    );
-                }
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Phone number is required'
+                });
             }
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            attempts++;
-        }
+            const cleanNumber =
+                phone.replace(
+                    /[^0-9]/g,
+                    ''
+                );
 
-        if (codeData && codeData.code) {
-            return res.json({
-                success: true,
-                code: codeData.code
+            if (
+                cleanNumber.length < 9
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Invalid phone number'
+                });
+            }
+
+            const webSessionId =
+                'web_' + Date.now();
+
+            const requestPath =
+                path.join(
+                    PAIRING_DIR,
+                    `request_${webSessionId}.json`
+                );
+
+            const pairingFile =
+                path.join(
+                    PAIRING_DIR,
+                    `pairing_${webSessionId}.json`
+                );
+
+            // ==========================================
+            // DEMANDE DE PAIRAGE
+            // ==========================================
+
+            fs.writeFileSync(
+                requestPath,
+                JSON.stringify({
+                    jid:
+                        cleanNumber +
+                        '@s.whatsapp.net',
+
+                    name:
+                        'Web User'
+                })
+            );
+
+            // ==========================================
+            // ATTENTE DU CODE
+            // ==========================================
+
+            let attempts = 0;
+
+            let codeData = null;
+
+            while (
+                attempts < 20
+            ) {
+
+                if (
+                    fs.existsSync(
+                        pairingFile
+                    )
+                ) {
+
+                    try {
+
+                        codeData =
+                            JSON.parse(
+                                fs.readFileSync(
+                                    pairingFile,
+                                    'utf-8'
+                                )
+                            );
+
+                        break;
+
+                    } catch (e) {
+
+                        console.error(
+                            'Erreur lecture fichier pairing:',
+                            e.message
+                        );
+                    }
+                }
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            1000
+                        )
+                );
+
+                attempts++;
+            }
+
+            // ==========================================
+            // CODE TROUVÉ
+            // ==========================================
+
+            if (
+                codeData &&
+                codeData.code
+            ) {
+
+                return res.json({
+                    success: true,
+                    code:
+                        codeData.code
+                });
+            }
+
+            // ==========================================
+            // TIMEOUT
+            // ==========================================
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    'Timeout generating pairing code.'
+            });
+
+        } catch (error) {
+
+            console.error(
+                'Erreur /api/connect:',
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    'Internal server error'
             });
         }
-
-        return res.status(500).json({
-            success: false,
-            message: 'Timeout generating pairing code.'
-        });
-
-    } catch (error) {
-        console.error('Erreur /api/connect:', error);
-
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error'
-        });
     }
-});
+);
 
-// Route pour compter les sessions actives
-app.get('/api/listpair', (req, res) => {
-    try {
-        const files = fs
-            .readdirSync(PAIRING_DIR)
-            .filter(file => file.startsWith('pairing_'));
+// ==========================================
+// 📊 NOMBRE DE PAIRAGES EN ATTENTE
+// ==========================================
 
-        res.json({
-            total: files.length
-        });
+app.get(
+    '/api/listpair',
+    (req, res) => {
 
-    } catch (error) {
-        console.error('Erreur listpair:', error.message);
+        try {
 
-        res.json({
-            total: 0
-        });
+            const files =
+                fs
+                    .readdirSync(
+                        PAIRING_DIR
+                    )
+                    .filter(
+                        file =>
+                            file.startsWith(
+                                'pairing_'
+                            )
+                    );
+
+            res.json({
+                total:
+                    files.length
+            });
+
+        } catch (error) {
+
+            console.error(
+                'Erreur listpair:',
+                error.message
+            );
+
+            res.json({
+                total: 0
+            });
+        }
     }
-});
+);
+
+// ==========================================
+// 🚀 LANCEMENT DU BOT
+// ==========================================
 
 async function launchBot() {
-    global.botName = 'KAYA-MD';
+
+    global.botName =
+        'KAYA-MD';
+
+    // ==========================================
+    // CLEANUP
+    // ==========================================
 
     startAutoCleanup();
 
-    app.listen(PORT, () => {
-        console.log(
-            chalk.green(
-                `🌐 Railway backend running on port ${PORT}`
-            )
-        );
-    });
+    // ==========================================
+    // SERVEUR
+    // ==========================================
+
+    app.listen(
+        PORT,
+        () => {
+
+            console.log(
+                chalk.green(
+                    `🌐 Railway backend running on port ${PORT}`
+                )
+            );
+
+            console.log(
+                chalk.green(
+                    `💾 Stockage persistant : ${DATA_DIR}`
+                )
+            );
+
+            console.log(
+                chalk.green(
+                    `📂 Sessions : ${PAIRING_DIR}`
+                )
+            );
+        }
+    );
+
+    // ==========================================
+    // RESTAURATION DES SESSIONS
+    // ==========================================
 
     console.log(
-        chalk.blue('⏳ Restauration des sessions en cours...')
+        chalk.blue(
+            '⏳ Restauration des sessions en cours...'
+        )
     );
 
     await restoreSessions();
 
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                5000
+            )
+    );
+
+    // ==========================================
+    // WATCHER
+    // ==========================================
 
     console.log(
         chalk.blue(
@@ -164,11 +342,20 @@ async function launchBot() {
     watchPairingRequests();
 }
 
-launchBot().catch(error => {
-    console.error(
-        chalk.red('❌ Erreur au démarrage du bot:'),
-        error
-    );
+// ==========================================
+// START
+// ==========================================
 
-    process.exit(1);
-});
+launchBot().catch(
+    error => {
+
+        console.error(
+            chalk.red(
+                '❌ Erreur au démarrage du bot:'
+            ),
+            error
+        );
+
+        process.exit(1);
+    }
+);

@@ -70,9 +70,27 @@ const __filename =
 const __dirname =
     path.dirname(__filename);
 
+// ==========================================
+// STOCKAGE PERSISTANT
+// ==========================================
+// Railway Volume recommandé : /data
+//
+// Si RAILWAY_VOLUME_MOUNT_PATH existe,
+// on l'utilise.
+// Sinon, on utilise /data.
+// ==========================================
+
+const STORAGE_DIR =
+    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+    "/data";
+
+// ==========================================
+// RICHSTORE / PAIRING
+// ==========================================
+
 const PAIRING_DIR =
     path.join(
-        process.cwd(),
+        STORAGE_DIR,
         "richstore",
         "pairing"
     );
@@ -610,36 +628,23 @@ export function forceCleanupSession(
     // CONFIG
     // ==========================================
 
-    const possibleConfigPaths = [
-
+    // Stockage persistant dans /data/userall
+    const configDir =
         path.join(
-            "/home/container/Kaya-MD",
+            STORAGE_DIR,
             "userall",
             cleanNumber
-        ),
+        );
 
-        path.join(
-            process.cwd(),
-            "userall",
-            cleanNumber
+    if (
+        fs.existsSync(
+            configDir
         )
-    ];
-
-    for (
-        const configDir
-        of possibleConfigPaths
     ) {
 
-        if (
-            fs.existsSync(
-                configDir
-            )
-        ) {
-
-            deleteFolderRecursive(
-                configDir
-            );
-        }
+        deleteFolderRecursive(
+            configDir
+        );
     }
 }
 
@@ -819,6 +824,11 @@ export default async function startpairing(
                 oldTracker.connection.ev
                     .removeAllListeners(
                         "messages.update"
+                    );
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "group-participants.update"
                     );
 
                 oldTracker.connection.ev
@@ -1299,6 +1309,7 @@ export default async function startpairing(
                             update
                         );
                     }
+
                 }
 
             } catch (err) {
@@ -1354,10 +1365,6 @@ export default async function startpairing(
                 // MODE ONLINE
                 // ==========================================
 
-                // Conservé pour compatibilité.
-                // Si ton module online.js force une présence
-                // permanente, il est recommandé de le désactiver
-                // dans ses propres réglages.
                 try {
 
                     const onlineEnabled =
