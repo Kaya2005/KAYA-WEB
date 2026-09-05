@@ -25,7 +25,7 @@
   "author": "KAYA",
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": "20.x"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
@@ -82,7 +82,7 @@
     "node-id3": "^0.2.6",
     "node-telegram-bot-api": "^0.66.0",
     "node-webpmux": "^3.1.7",
-    "node-youtube-music": "^0.8.3",
+    "node-youtube-music": "^0.8.0",
     "openai": "^4.69.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.2.2",
@@ -99,7 +99,7 @@
     "user-agents": "^1.1.379",
     "uuid": "^10.0.0",
     "wa-sticker-formatter": "^4.4.4",
-    "yargs": "^17.7.2",
+    "yargs": "^17.7.0",
     "yt-search": "^2.12.1",
     "youtube-yts": "^2.0.0",
     "youtubedl-core": "^4.11.4",
