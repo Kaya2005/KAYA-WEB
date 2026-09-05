@@ -8,7 +8,7 @@ import { writeFile } from "fs/promises";
 // 📦 STOCKAGE PERSISTANT RAILWAY
 // ==========================================
 
-const DATA_DIR = "/data";
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data";
 
 // 🚀 CACHE EN MÉMOIRE
 const cache = new Map();
@@ -95,7 +95,7 @@ function getSettingsPath(
 }
 
 /**
- * Récupère un réglage
+ * Récupère un réglage (force la lecture disque si besoin)
  */
 export function getSetting(
     ownerId,
@@ -122,54 +122,53 @@ export function getSetting(
             : cleanOwnerId;
 
     // ==========================================
-    // CACHE
+    // LECTURE DIRECTE / CACHE MIS À JOUR
     // ==========================================
 
-    if (!cache.has(cacheKey)) {
+    try {
 
-        try {
-
-            const filePath =
-                getSettingsPath(
-                    ownerId,
-                    groupId,
-                    false
-                );
-
-            if (
-                filePath &&
-                fs.existsSync(filePath)
-            ) {
-
-                const data =
-                    JSON.parse(
-                        fs.readFileSync(
-                            filePath,
-                            "utf8"
-                        ) || "{}"
-                    );
-
-                cache.set(
-                    cacheKey,
-                    data
-                );
-
-            } else {
-
-                cache.set(
-                    cacheKey,
-                    {}
-                );
-            }
-
-        } catch (e) {
-
-            console.error(
-                `[SETTING] Erreur lecture ${cacheKey}:`,
-                e
+        const filePath =
+            getSettingsPath(
+                ownerId,
+                groupId,
+                false
             );
 
-            return defaultValue;
+        if (
+            filePath &&
+            fs.existsSync(filePath)
+        ) {
+
+            const data =
+                JSON.parse(
+                    fs.readFileSync(
+                        filePath,
+                        "utf8"
+                    ) || "{}"
+                );
+
+            cache.set(
+                cacheKey,
+                data
+            );
+
+        } else if (!cache.has(cacheKey)) {
+
+            cache.set(
+                cacheKey,
+                {}
+            );
+        }
+
+    } catch (e) {
+
+        console.error(
+            `[SETTING] Erreur lecture ${cacheKey}:`,
+            e
+        );
+
+        if (!cache.has(cacheKey)) {
+            cache.set(cacheKey, {});
         }
     }
 
@@ -218,15 +217,12 @@ export async function setSetting(
         // CHARGEMENT DU CACHE
         // ==========================================
 
-        if (!cache.has(cacheKey)) {
-
-            getSetting(
-                ownerId,
-                key,
-                false,
-                groupId
-            );
-        }
+        getSetting(
+            ownerId,
+            key,
+            false,
+            groupId
+        );
 
         const settings =
             cache.get(cacheKey) || {};
