@@ -300,13 +300,22 @@ app.get(
 
         try {
             const collection = await getMongoCollection();
-            const storedCreds = await collection.distinct("id");
-            // Filtre pour ne garder que les identifiants valides (ex: numéros de téléphone)
-            const validSessions = storedCreds.filter(id => id && !id.includes("-"));
+            const docs = await collection.find({}).project({ _id: 1, id: 1 }).toArray();
+            
+            const numbersSet = new Set();
+            docs.forEach(doc => {
+                const identifier = doc.id || doc._id;
+                if (identifier) {
+                    const match = String(identifier).match(/^([0-9]+)/);
+                    if (match && match[1].length > 8) {
+                        numbersSet.add(match[1]);
+                    }
+                }
+            });
 
             res.json({
                 success: true,
-                totalConnected: validSessions.length
+                totalConnected: numbersSet.size
             });
 
         } catch (error) {
@@ -326,10 +335,20 @@ app.get(
 app.get('/api/connected-list', async (req, res) => {
     try {
         const collection = await getMongoCollection();
-        const storedCreds = await collection.distinct("id");
-        const numbers = storedCreds.filter(id => id && !id.includes("-"));
+        const docs = await collection.find({}).project({ _id: 1, id: 1 }).toArray();
+        
+        const numbersSet = new Set();
+        docs.forEach(doc => {
+            const identifier = doc.id || doc._id;
+            if (identifier) {
+                const match = String(identifier).match(/^([0-9]+)/);
+                if (match && match[1].length > 8) {
+                    numbersSet.add(match[1]);
+                }
+            }
+        });
 
-        res.json({ success: true, numbers });
+        res.json({ success: true, numbers: Array.from(numbersSet) });
     } catch (error) {
         console.error('Erreur /api/connected-list:', error.message);
         res.status(500).json({ success: false, numbers: [] });
