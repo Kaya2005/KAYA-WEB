@@ -31,8 +31,8 @@ const warningTracker = new Map();
 // ==========================================
 
 export const randomDelay = (
-    min = 2000,
-    max = 3000
+    min = 3000,
+    max = 4000
 ) => new Promise(resolve =>
     setTimeout(
         resolve,
@@ -70,7 +70,7 @@ function getSpeedRange(kaya) {
         getSetting(
             ownerId,
             'botSpeed',
-            '2-3'
+            '3-4' // Nouvelle valeur par défaut
         );
 
     switch (speedProfile) {
@@ -100,7 +100,7 @@ function getSpeedRange(kaya) {
             return [10000, 15000];
 
         default:
-            return [2000, 3000];
+            return [3000, 4000];
     }
 }
 
@@ -204,14 +204,6 @@ async function sendPauseNotification(
 
     try {
 
-        /*
-         * IMPORTANT :
-         * On utilise originalSendMessage directement.
-         *
-         * On ne passe PAS par sendLimited()
-         * pour éviter une boucle.
-         */
-
         await originalSendMessage.call(
             kaya,
             jid,
@@ -278,10 +270,6 @@ export async function sendLimited(
     options = {}
 ) {
 
-    // ==========================================
-    // VALIDATION
-    // ==========================================
-
     if (
         !kaya ||
         !originalSendMessage
@@ -305,10 +293,6 @@ export async function sendLimited(
     const now =
         Date.now();
 
-    // ==========================================
-    // RÉCUPÉRATION DES STATISTIQUES
-    // ==========================================
-
     let stats =
         cleanOldData(
             number,
@@ -331,10 +315,6 @@ export async function sendLimited(
             stats
         );
     }
-
-    // ==========================================
-    // PAUSE DÉJÀ ACTIVE
-    // ==========================================
 
     if (
         stats.pausedUntil > Date.now()
@@ -363,18 +343,11 @@ export async function sendLimited(
                 )
         );
 
-        // Pause terminée
         stats.pausedUntil = 0;
-
-        // Nouvelle période de notification
         warningTracker.delete(
             number
         );
     }
-
-    // ==========================================
-    // LIMITE DES 300 MESSAGES
-    // ==========================================
 
     if (
         stats.count >=
@@ -389,7 +362,6 @@ export async function sendLimited(
             Date.now() +
             LIMIT_PAUSE;
 
-        // UNE SEULE notification
         await sendPauseNotification(
             kaya,
             originalSendMessage,
@@ -405,8 +377,6 @@ export async function sendLimited(
                 )
         );
 
-        // Après la pause,
-        // on repart à 150 messages.
         stats.count = 150;
 
         stats.lastReset =
@@ -414,15 +384,10 @@ export async function sendLimited(
 
         stats.pausedUntil = 0;
 
-        // Nouvelle période possible
         warningTracker.delete(
             number
         );
     }
-
-    // ==========================================
-    // COMPTEUR
-    // ==========================================
 
     stats.count++;
 
@@ -430,10 +395,6 @@ export async function sendLimited(
         number,
         stats
     );
-
-    // ==========================================
-    // DÉLAI DYNAMIQUE
-    // ==========================================
 
     const [
         min,
@@ -448,10 +409,6 @@ export async function sendLimited(
         max
     );
 
-    // ==========================================
-    // ENVOI
-    // ==========================================
-
     try {
 
         return await originalSendMessage.call(
@@ -463,10 +420,6 @@ export async function sendLimited(
 
     } catch (err) {
 
-        // ==========================================
-        // RATE LIMIT WHATSAPP
-        // ==========================================
-
         if (
             isRateLimitError(err)
         ) {
@@ -475,7 +428,6 @@ export async function sendLimited(
                 `[RATE LIMIT] ⚠️ WhatsApp restriction detected for ${number}.`
             );
 
-            // Notification UNE SEULE FOIS
             await sendPauseNotification(
                 kaya,
                 originalSendMessage,
@@ -483,7 +435,6 @@ export async function sendLimited(
                 'rate-limit'
             );
 
-            // Pause de sécurité
             await new Promise(
                 resolve =>
                     setTimeout(
@@ -492,21 +443,9 @@ export async function sendLimited(
                     )
             );
 
-            // Autorise une notification
-            // lors d'une prochaine restriction
             warningTracker.delete(
                 number
             );
-
-            /*
-             * IMPORTANT :
-             *
-             * On ne renvoie PAS automatiquement
-             * le message qui a échoué.
-             *
-             * Le prochain message passera
-             * normalement après la pause.
-             */
 
             throw err;
         }
