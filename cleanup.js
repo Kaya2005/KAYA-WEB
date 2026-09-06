@@ -4,12 +4,13 @@ import fs from 'fs';
 import path from 'path';
 
 // ==========================================
-// 📦 STOCKAGE PERSISTANT RAILWAY
+// 📦 STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
 
 const DATA_DIR =
     process.env.RAILWAY_VOLUME_MOUNT_PATH ||
-    "/data";
+    process.env.STORAGE_DIR ||
+    '/data';
 
 const PAIRING_DIR =
     path.join(
@@ -28,7 +29,7 @@ export function startAutoCleanup() {
     // 📁 DOSSIER TEMPORAIRE
     // ==========================================
     // On garde les fichiers temporaires dans
-    // /data afin qu'ils soient centralisés.
+    // DATA_DIR afin qu'ils soient centralisés.
     // ==========================================
 
     const TEMP_DIR =

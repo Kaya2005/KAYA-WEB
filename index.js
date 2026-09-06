@@ -14,10 +14,13 @@ import {
 } from './cleanup.js';
 
 // ==========================================
-// 📦 STOCKAGE PERSISTANT RAILWAY
+// 📦 STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
 
-const DATA_DIR = '/data';
+const DATA_DIR =
+    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+    process.env.STORAGE_DIR ||
+    path.join(process.cwd(), 'data');
 
 const RICHSTORE_DIR =
     path.join(DATA_DIR, 'richstore');
@@ -360,7 +363,7 @@ async function launchBot() {
 
             console.log(
                 chalk.green(
-                    `🌐 Railway backend running on port ${PORT}`
+                    `🌐 Server running on port ${PORT}`
                 )
             );
 

@@ -5,10 +5,10 @@ import path from "path";
 import { writeFile } from "fs/promises";
 
 // ==========================================
-// 📦 STOCKAGE PERSISTANT RAILWAY
+// 📦 STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
 
-const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data";
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.STORAGE_DIR || path.join(process.cwd(), "data");
 
 // 🚀 CACHE EN MÉMOIRE
 const cache = new Map();
@@ -74,18 +74,20 @@ function getSettingsPath(
         );
     }
 
-    // Création du dossier si nécessaire
-    if (
-        createIfMissing &&
-        !fs.existsSync(baseDir)
-    ) {
-
-        fs.mkdirSync(
-            baseDir,
-            {
-                recursive: true
+    // Création du dossier si nécessaire avec gestion d'erreur sécurisée
+    if (createIfMissing) {
+        try {
+            if (!fs.existsSync(baseDir)) {
+                fs.mkdirSync(
+                    baseDir,
+                    {
+                        recursive: true
+                    }
+                );
             }
-        );
+        } catch (err) {
+            console.error(`[SETTING] Erreur création dossier ${baseDir}:`, err);
+        }
     }
 
     return path.join(
@@ -139,12 +141,10 @@ export function getSetting(
             fs.existsSync(filePath)
         ) {
 
+            const fileContent = fs.readFileSync(filePath, "utf8");
             const data =
                 JSON.parse(
-                    fs.readFileSync(
-                        filePath,
-                        "utf8"
-                    ) || "{}"
+                    fileContent || "{}"
                 );
 
             cache.set(
@@ -252,13 +252,20 @@ export async function setSetting(
 
         if (filePath) {
 
+            // Vérification de sécurité supplémentaire juste avant l'écriture
+            const parentDir = path.dirname(filePath);
+            if (!fs.existsSync(parentDir)) {
+                fs.mkdirSync(parentDir, { recursive: true });
+            }
+
             await writeFile(
                 filePath,
                 JSON.stringify(
                     settings,
                     null,
                     2
-                )
+                ),
+                "utf8"
             );
         }
 

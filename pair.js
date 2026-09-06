@@ -71,18 +71,13 @@ const __dirname =
     path.dirname(__filename);
 
 // ==========================================
-// STOCKAGE PERSISTANT
-// ==========================================
-// Railway Volume recommandé : /data
-//
-// Si RAILWAY_VOLUME_MOUNT_PATH existe,
-// on l'utilise.
-// Sinon, on utilise /data.
+// STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
 
 const STORAGE_DIR =
     process.env.RAILWAY_VOLUME_MOUNT_PATH ||
-    "/data";
+    process.env.STORAGE_DIR ||
+    path.join(process.cwd(), "data");
 
 // ==========================================
 // RICHSTORE / PAIRING
