@@ -711,7 +711,8 @@ export default async function startpairing(
             const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
             console.log(`${logPrefix} 🔴 Connexion fermée. Code: ${statusCode}`);
 
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 403) {
+            if (statusCode === DisconnectReason.loggedOut || statusCode === 403 || statusCode === 401) {
+                console.log(`${logPrefix} ⚠️ Session expirée ou rejetée (Code ${statusCode}). Nettoyage complet...`);
                 try { destroySendQueue(kaya); } catch {}
                 await forceCleanupSession(number, teleId);
                 return;
