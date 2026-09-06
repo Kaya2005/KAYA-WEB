@@ -307,6 +307,35 @@ app.get(
 );
 
 // ==========================================
+// 📋 LISTE DES NUMÉROS CONNECTÉS
+// ==========================================
+
+app.get('/api/connected-list', (req, res) => {
+    try {
+        if (!fs.existsSync(PAIRING_DIR)) {
+            return res.json({ success: true, numbers: [] });
+        }
+
+        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+        const numbers = [];
+
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const credsPath = path.join(PAIRING_DIR, entry.name, 'creds.json');
+                if (fs.existsSync(credsPath)) {
+                    numbers.push(entry.name);
+                }
+            }
+        }
+
+        res.json({ success: true, numbers });
+    } catch (error) {
+        console.error('Erreur /api/connected-list:', error.message);
+        res.status(500).json({ success: false, numbers: [] });
+    }
+});
+
+// ==========================================
 // 🚀 LANCEMENT DU BOT
 // ==========================================
 
