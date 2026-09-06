@@ -1,8 +1,11 @@
+// ==================== server.js (ou index.js) ====================
+
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
+import { MongoClient } from 'mongodb';
 
 import {
     restoreSessions,
@@ -29,7 +32,25 @@ const PAIRING_DIR =
     path.join(RICHSTORE_DIR, 'pairing');
 
 // ==========================================
-// 📁 CRÉATION DES DOSSIERS
+// MONGODB CONFIGURATION
+// ==========================================
+
+const MONGO_URI = process.env.MONGO_URI || "ta_chaine_de_connexion_mongodb";
+let mongoClient = null;
+let sessionsCollection = null;
+
+async function getMongoCollection() {
+    if (!mongoClient) {
+        mongoClient = new MongoClient(MONGO_URI);
+        await mongoClient.connect();
+        const db = mongoClient.db("kaya_bot_sessions");
+        sessionsCollection = db.collection("whatsapp_auth");
+    }
+    return sessionsCollection;
+}
+
+// ==========================================
+// 📁 CRÉATION DES DOSSIERS DE PAIRAGE TEMPORAIRE
 // ==========================================
 
 if (!fs.existsSync(RICHSTORE_DIR)) {
@@ -270,33 +291,22 @@ app.get(
 );
 
 // ==========================================
-// 👥 NOMBRE DE SESSIONS CONNECTÉES
+// 👥 NOMBRE DE SESSIONS CONNECTÉES (MongoDB)
 // ==========================================
 
 app.get(
     '/api/online-count',
-    (req, res) => {
+    async (req, res) => {
 
         try {
-            if (!fs.existsSync(PAIRING_DIR)) {
-                return res.json({ success: true, totalConnected: 0 });
-            }
-
-            const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
-
-            let sessionCount = 0;
-            for (const entry of entries) {
-                if (entry.isDirectory()) {
-                    const credsPath = path.join(PAIRING_DIR, entry.name, 'creds.json');
-                    if (fs.existsSync(credsPath)) {
-                        sessionCount++;
-                    }
-                }
-            }
+            const collection = await getMongoCollection();
+            const storedCreds = await collection.distinct("id");
+            // Filtre pour ne garder que les identifiants valides (ex: numéros de téléphone)
+            const validSessions = storedCreds.filter(id => id && !id.includes("-"));
 
             res.json({
                 success: true,
-                totalConnected: sessionCount
+                totalConnected: validSessions.length
             });
 
         } catch (error) {
@@ -310,26 +320,14 @@ app.get(
 );
 
 // ==========================================
-// 📋 LISTE DES NUMÉROS CONNECTÉS
+// 📋 LISTE DES NUMÉROS CONNECTÉS (MongoDB)
 // ==========================================
 
-app.get('/api/connected-list', (req, res) => {
+app.get('/api/connected-list', async (req, res) => {
     try {
-        if (!fs.existsSync(PAIRING_DIR)) {
-            return res.json({ success: true, numbers: [] });
-        }
-
-        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
-        const numbers = [];
-
-        for (const entry of entries) {
-            if (entry.isDirectory()) {
-                const credsPath = path.join(PAIRING_DIR, entry.name, 'creds.json');
-                if (fs.existsSync(credsPath)) {
-                    numbers.push(entry.name);
-                }
-            }
-        }
+        const collection = await getMongoCollection();
+        const storedCreds = await collection.distinct("id");
+        const numbers = storedCreds.filter(id => id && !id.includes("-"));
 
         res.json({ success: true, numbers });
     } catch (error) {
@@ -375,7 +373,7 @@ async function launchBot() {
 
             console.log(
                 chalk.green(
-                    `📂 Sessions : ${PAIRING_DIR}`
+                    `📂 Pairing : ${PAIRING_DIR}`
                 )
             );
         }
