@@ -31,8 +31,8 @@ const warningTracker = new Map();
 // ==========================================
 
 export const randomDelay = (
-    min = 5000,
-    max = 8000
+    min = 2000,
+    max = 3000
 ) => new Promise(resolve =>
     setTimeout(
         resolve,
@@ -70,7 +70,7 @@ function getSpeedRange(kaya) {
         getSetting(
             ownerId,
             'botSpeed',
-            '5-8'
+            '2-3'
         );
 
     switch (speedProfile) {
@@ -100,7 +100,7 @@ function getSpeedRange(kaya) {
             return [10000, 15000];
 
         default:
-            return [5000, 8000];
+            return [2000, 3000];
     }
 }
 
