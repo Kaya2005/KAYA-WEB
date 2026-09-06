@@ -1,11 +1,10 @@
-// ==================== server.js (ou index.js) ====================
+
 
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { MongoClient } from 'mongodb';
 
 import {
     restoreSessions,
@@ -32,25 +31,7 @@ const PAIRING_DIR =
     path.join(RICHSTORE_DIR, 'pairing');
 
 // ==========================================
-// MONGODB CONFIGURATION
-// ==========================================
-
-const MONGO_URI = process.env.MONGO_URI || "ta_chaine_de_connexion_mongodb";
-let mongoClient = null;
-let sessionsCollection = null;
-
-async function getMongoCollection() {
-    if (!mongoClient) {
-        mongoClient = new MongoClient(MONGO_URI);
-        await mongoClient.connect();
-        const db = mongoClient.db("kaya_bot_sessions");
-        sessionsCollection = db.collection("whatsapp_auth");
-    }
-    return sessionsCollection;
-}
-
-// ==========================================
-// 📁 CRÉATION DES DOSSIERS DE PAIRAGE TEMPORAIRE
+// 📁 CRÉATION DES DOSSIERS
 // ==========================================
 
 if (!fs.existsSync(RICHSTORE_DIR)) {
@@ -291,31 +272,33 @@ app.get(
 );
 
 // ==========================================
-// 👥 NOMBRE DE SESSIONS CONNECTÉES (MongoDB)
+// 👥 NOMBRE DE SESSIONS CONNECTÉES
 // ==========================================
 
 app.get(
     '/api/online-count',
-    async (req, res) => {
+    (req, res) => {
 
         try {
-            const collection = await getMongoCollection();
-            const docs = await collection.find({}).project({ _id: 1, id: 1 }).toArray();
-            
-            const numbersSet = new Set();
-            docs.forEach(doc => {
-                const identifier = doc.id || doc._id;
-                if (identifier) {
-                    const match = String(identifier).match(/^([0-9]+)/);
-                    if (match && match[1].length > 8) {
-                        numbersSet.add(match[1]);
+            if (!fs.existsSync(PAIRING_DIR)) {
+                return res.json({ success: true, totalConnected: 0 });
+            }
+
+            const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+
+            let sessionCount = 0;
+            for (const entry of entries) {
+                if (entry.isDirectory()) {
+                    const credsPath = path.join(PAIRING_DIR, entry.name, 'creds.json');
+                    if (fs.existsSync(credsPath)) {
+                        sessionCount++;
                     }
                 }
-            });
+            }
 
             res.json({
                 success: true,
-                totalConnected: numbersSet.size
+                totalConnected: sessionCount
             });
 
         } catch (error) {
@@ -329,26 +312,28 @@ app.get(
 );
 
 // ==========================================
-// 📋 LISTE DES NUMÉROS CONNECTÉS (MongoDB)
+// 📋 LISTE DES NUMÉROS CONNECTÉS
 // ==========================================
 
-app.get('/api/connected-list', async (req, res) => {
+app.get('/api/connected-list', (req, res) => {
     try {
-        const collection = await getMongoCollection();
-        const docs = await collection.find({}).project({ _id: 1, id: 1 }).toArray();
-        
-        const numbersSet = new Set();
-        docs.forEach(doc => {
-            const identifier = doc.id || doc._id;
-            if (identifier) {
-                const match = String(identifier).match(/^([0-9]+)/);
-                if (match && match[1].length > 8) {
-                    numbersSet.add(match[1]);
+        if (!fs.existsSync(PAIRING_DIR)) {
+            return res.json({ success: true, numbers: [] });
+        }
+
+        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+        const numbers = [];
+
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const credsPath = path.join(PAIRING_DIR, entry.name, 'creds.json');
+                if (fs.existsSync(credsPath)) {
+                    numbers.push(entry.name);
                 }
             }
-        });
+        }
 
-        res.json({ success: true, numbers: Array.from(numbersSet) });
+        res.json({ success: true, numbers });
     } catch (error) {
         console.error('Erreur /api/connected-list:', error.message);
         res.status(500).json({ success: false, numbers: [] });
@@ -392,7 +377,7 @@ async function launchBot() {
 
             console.log(
                 chalk.green(
-                    `📂 Pairing : ${PAIRING_DIR}`
+                    `📂 Sessions : ${PAIRING_DIR}`
                 )
             );
         }

@@ -1,15 +1,14 @@
+
 // ==================== pair.js ====================
 
 import {
     default as makeWASocket,
     jidDecode,
     DisconnectReason,
+    useMultiFileAuthState,
     Browsers,
     getContentType
 } from "@whiskeysockets/baileys";
-
-import { MongoClient } from "mongodb";
-import { useMongoDBAuthState } from "mongo-baileys";
 
 import { Boom } from "@hapi/boom";
 import fs from "fs";
@@ -73,32 +72,17 @@ const __dirname =
     path.dirname(__filename);
 
 // ==========================================
-// MONGODB CONFIGURATION
-// ==========================================
-
-const MONGO_URI = process.env.MONGO_URI || "ta_chaine_de_connexion_mongodb";
-let mongoClient = null;
-let sessionsCollection = null;
-
-async function getMongoCollection() {
-    if (!mongoClient) {
-        mongoClient = new MongoClient(MONGO_URI);
-        await mongoClient.connect();
-        const db = mongoClient.db("kaya_bot_sessions");
-        sessionsCollection = db.collection("whatsapp_auth");
-        console.log("[MONGODB] 📦 Connecté avec succès pour les sessions WhatsApp !");
-    }
-    return sessionsCollection;
-}
-
-// ==========================================
-// STOCKAGE PERSISTANT UNIVERSEL (pour pairing et config)
+// STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
 
 const STORAGE_DIR =
     process.env.RAILWAY_VOLUME_MOUNT_PATH ||
     process.env.STORAGE_DIR ||
     path.join(process.cwd(), "data");
+
+// ==========================================
+// RICHSTORE / PAIRING
+// ==========================================
 
 const PAIRING_DIR =
     path.join(
@@ -243,36 +227,128 @@ export function watchPairingRequests() {
 }
 
 // ==========================================
-// RESTAURATION DES SESSIONS (MongoDB)
+// RESTAURATION DES SESSIONS
 // ==========================================
 
 export async function restoreSessions() {
-    try {
-        const collection = await getMongoCollection();
-        // Récupère toutes les sessions distinctes enregistrées dans MongoDB
-        const storedCreds = await collection.distinct("id");
 
-        for (const sessionId of storedCreds) {
-            // Le sessionId dans mongo-baileys correspond souvent au numéro ou à l'identifiant
-            if (!sessionId || sessionId.includes("-")) continue;
+    if (!fs.existsSync(PAIRING_DIR)) {
+        return;
+    }
 
-            console.log(`[RESTORE] 🔄 Restauration de la session MongoDB pour : ${sessionId}`);
+    const folders =
+        fs.readdirSync(
+            PAIRING_DIR
+        );
 
-            startpairing(
-                sessionId,
-                "default",
-                "Client WhatsApp"
-            ).catch(error => {
-                console.error(
-                    `[RESTORE] ❌ Erreur restauration ${sessionId}:`,
-                    error.message
-                );
-            });
+    for (const folder of folders) {
 
-            await new Promise(resolve => setTimeout(resolve, 5000));
+        if (
+            folder.startsWith(
+                "request_"
+            ) ||
+            folder.startsWith(
+                "pairing_"
+            ) ||
+            folder.endsWith(
+                ".json"
+            )
+        ) {
+            continue;
         }
-    } catch (err) {
-        console.error("[RESTORE] ❌ Erreur lors de la récupération des sessions MongoDB:", err);
+
+        const sessionPath =
+            path.join(
+                PAIRING_DIR,
+                folder
+            );
+
+        if (
+            !fs.lstatSync(
+                sessionPath
+            ).isDirectory()
+        ) {
+            continue;
+        }
+
+        const credsPath =
+            path.join(
+                sessionPath,
+                "creds.json"
+            );
+
+        if (
+            !fs.existsSync(
+                credsPath
+            )
+        ) {
+            continue;
+        }
+
+        let teleId =
+            "default";
+
+        let userName =
+            "Client WhatsApp";
+
+        const metaPath =
+            path.join(
+                sessionPath,
+                "metadata.json"
+            );
+
+        if (
+            fs.existsSync(
+                metaPath
+            )
+        ) {
+
+            try {
+
+                const meta =
+                    JSON.parse(
+                        fs.readFileSync(
+                            metaPath,
+                            "utf-8"
+                        )
+                    );
+
+                teleId =
+                    meta.teleId ||
+                    "default";
+
+                userName =
+                    meta.userName ||
+                    "Client WhatsApp";
+
+            } catch {}
+        }
+
+        console.log(
+            `[RESTORE] 🔄 Restauration de la session : ${folder} (TeleID: ${teleId})`
+        );
+
+        startpairing(
+            folder,
+            teleId,
+            userName
+        ).catch(error => {
+
+            console.error(
+                `[RESTORE] ❌ Erreur restauration ${folder}:`,
+                error.message
+            );
+        });
+
+        // Évite de lancer toutes les sessions
+        // exactement au même moment.
+        await new Promise(
+            resolve =>
+                setTimeout(
+                    resolve,
+                    5000
+                )
+        );
     }
 }
 
@@ -293,10 +369,59 @@ const sleep = ms =>
     );
 
 // ==========================================
+// SUPPRESSION DOSSIER
+// ==========================================
+
+function deleteFolderRecursive(
+    folderPath
+) {
+
+    if (
+        !fs.existsSync(
+            folderPath
+        )
+    ) {
+        return;
+    }
+
+    fs.readdirSync(
+        folderPath
+    ).forEach(file => {
+
+        const curPath =
+            path.join(
+                folderPath,
+                file
+            );
+
+        if (
+            fs.lstatSync(
+                curPath
+            ).isDirectory()
+        ) {
+
+            deleteFolderRecursive(
+                curPath
+            );
+
+        } else {
+
+            fs.unlinkSync(
+                curPath
+            );
+        }
+    });
+
+    fs.rmdirSync(
+        folderPath
+    );
+}
+
+// ==========================================
 // CLEANUP SESSION
 // ==========================================
 
-export async function forceCleanupSession(
+export function forceCleanupSession(
     number,
     teleId = "default"
 ) {
@@ -311,7 +436,16 @@ export async function forceCleanupSession(
             ""
         );
 
-    // Arrêt Socket + Queue
+    const sessionPath =
+        path.join(
+            PAIRING_DIR,
+            cleanNumber
+        );
+
+    // ==========================================
+    // ARRÊT SOCKET + QUEUE
+    // ==========================================
+
     if (
         rentbotTracker.has(
             cleanNumber
@@ -328,19 +462,52 @@ export async function forceCleanupSession(
         ) {
 
             try {
-                destroySendQueue(tracker.connection);
+
+                destroySendQueue(
+                    tracker.connection
+                );
+
             } catch {}
 
             try {
-                tracker.connection.ev.removeAllListeners();
+
+                tracker.connection.ev
+                    .removeAllListeners(
+                        "connection.update"
+                    );
+
+                tracker.connection.ev
+                    .removeAllListeners(
+                        "creds.update"
+                    );
+
+                tracker.connection.ev
+                    .removeAllListeners(
+                        "messages.upsert"
+                    );
+
+                tracker.connection.ev
+                    .removeAllListeners(
+                        "messages.update"
+                    );
+
+                tracker.connection.ev
+                    .removeAllListeners(
+                        "group-participants.update"
+                    );
+
             } catch {}
 
             try {
+
                 tracker.connection.ws?.close();
+
             } catch {}
 
             try {
+
                 tracker.connection.end();
+
             } catch {}
         }
 
@@ -349,29 +516,113 @@ export async function forceCleanupSession(
         );
     }
 
-    // Suppression des données d'authentification dans MongoDB
-    try {
-        const collection = await getMongoCollection();
-        await collection.deleteMany({ id: { $regex: cleanNumber } });
-    } catch (e) {
-        console.error(`[CLEANUP] Erreur suppression MongoDB pour ${cleanNumber}:`, e);
+    // ==========================================
+    // SESSION
+    // ==========================================
+
+    if (
+        fs.existsSync(
+            sessionPath
+        )
+    ) {
+
+        deleteFolderRecursive(
+            sessionPath
+        );
     }
 
-    // Nettoyage fichiers locaux de pairing / config
+    // ==========================================
+    // PAIRING FILE
+    // ==========================================
+
     if (
         teleId &&
         teleId !== "default"
     ) {
+
         const pairingFile =
             path.join(
                 PAIRING_DIR,
                 `pairing_${teleId}.json`
             );
 
-        if (fs.existsSync(pairingFile)) {
-            fs.unlinkSync(pairingFile);
+        if (
+            fs.existsSync(
+                pairingFile
+            )
+        ) {
+
+            fs.unlinkSync(
+                pairingFile
+            );
+        }
+
+    } else {
+
+        if (
+            fs.existsSync(
+                PAIRING_DIR
+            )
+        ) {
+
+            const files =
+                fs.readdirSync(
+                    PAIRING_DIR
+                );
+
+            for (
+                const file of files
+            ) {
+
+                if (
+                    file.startsWith(
+                        "pairing_"
+                    ) &&
+                    file.endsWith(
+                        ".json"
+                    )
+                ) {
+
+                    try {
+
+                        const filePath =
+                            path.join(
+                                PAIRING_DIR,
+                                file
+                            );
+
+                        const data =
+                            JSON.parse(
+                                fs.readFileSync(
+                                    filePath,
+                                    "utf-8"
+                                )
+                            );
+
+                        if (
+                            (
+                                data.number ||
+                                ""
+                            ).replace(
+                                /[^0-9]/g,
+                                ""
+                            ) === cleanNumber
+                        ) {
+
+                            fs.unlinkSync(
+                                filePath
+                            );
+                        }
+
+                    } catch {}
+                }
+            }
         }
     }
+
+    // ==========================================
+    // CONFIG
+    // ==========================================
 
     const configDir =
         path.join(
@@ -380,8 +631,15 @@ export async function forceCleanupSession(
             cleanNumber
         );
 
-    if (fs.existsSync(configDir)) {
-        fs.rmSync(configDir, { recursive: true, force: true });
+    if (
+        fs.existsSync(
+            configDir
+        )
+    ) {
+
+        deleteFolderRecursive(
+            configDir
+        );
     }
 }
 
@@ -514,32 +772,204 @@ export default async function startpairing(
     const logPrefix =
         `[${number} | ID:${instanceId}]`;
 
-    // Fermer ancienne instance si existe
-    if (rentbotTracker.has(number)) {
-        const oldTracker = rentbotTracker.get(number);
-        if (oldTracker.connection) {
-            try { destroySendQueue(oldTracker.connection); } catch {}
-            try { oldTracker.connection.end(); } catch {}
+    // ==========================================
+    // FERMER ANCIENNE INSTANCE
+    // ==========================================
+
+    if (
+        rentbotTracker.has(
+            number
+        )
+    ) {
+
+        const oldTracker =
+            rentbotTracker.get(
+                number
+            );
+
+        if (
+            oldTracker.connection
+        ) {
+
+            try {
+
+                destroySendQueue(
+                    oldTracker.connection
+                );
+
+            } catch {}
+
+            try {
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "connection.update"
+                    );
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "creds.update"
+                    );
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "messages.upsert"
+                    );
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "messages.update"
+                    );
+
+                oldTracker.connection.ev
+                    .removeAllListeners(
+                        "group-participants.update"
+                    );
+
+            } catch {}
+
+            try {
+
+                oldTracker.connection.ws?.close();
+
+            } catch {}
+
+            try {
+
+                oldTracker.connection.end();
+
+            } catch {}
         }
-        rentbotTracker.delete(number);
+
+        rentbotTracker.delete(
+            number
+        );
     }
 
-    let isReady = false;
+    // ==========================================
+    // TRACKER
+    // ==========================================
+
+    let isReady =
+        false;
+
     const tracker = {
         connection: null,
         isConnected: false,
         status: "starting"
     };
 
-    rentbotTracker.set(number, tracker);
+    rentbotTracker.set(
+        number,
+        tracker
+    );
 
     // ==========================================
-    // AUTH STATE VIA MONGODB
+    // SESSION PATH
     // ==========================================
 
-    const collection = await getMongoCollection();
-    // On passe un identifiant unique basé sur le numéro pour isoler chaque session
-    const { state, saveCreds } = await useMongoDBAuthState(collection, number);
+    const sessionPath =
+        path.join(
+            PAIRING_DIR,
+            number
+        );
+
+    if (
+        !fs.existsSync(
+            sessionPath
+        )
+    ) {
+
+        fs.mkdirSync(
+            sessionPath,
+            {
+                recursive: true
+            }
+        );
+    }
+
+    // ==========================================
+    // METADATA
+    // ==========================================
+
+    const metadataPath =
+        path.join(
+            sessionPath,
+            "metadata.json"
+        );
+
+    if (
+        fs.existsSync(
+            metadataPath
+        )
+    ) {
+
+        try {
+
+            const existingMeta =
+                JSON.parse(
+                    fs.readFileSync(
+                        metadataPath,
+                        "utf-8"
+                    )
+                );
+
+            if (
+                teleId === "default" &&
+                existingMeta.teleId &&
+                existingMeta.teleId !==
+                    "default"
+            ) {
+
+                teleId =
+                    existingMeta.teleId;
+            }
+
+            if (
+                userName ===
+                    "Client WhatsApp" &&
+                existingMeta.userName &&
+                existingMeta.userName !==
+                    "Client WhatsApp"
+            ) {
+
+                userName =
+                    existingMeta.userName;
+            }
+
+        } catch {}
+    }
+
+    fs.writeFileSync(
+        metadataPath,
+        JSON.stringify(
+            {
+                number:
+                    nexusDevNumber,
+
+                teleId,
+
+                userName,
+
+                timestamp:
+                    new Date().toISOString()
+            },
+            null,
+            2
+        )
+    );
+
+    // ==========================================
+    // AUTH STATE
+    // ==========================================
+
+    const {
+        state,
+        saveCreds
+    } =
+        await useMultiFileAuthState(
+            sessionPath
+        );
 
     await sleep(2000);
 
@@ -582,189 +1012,774 @@ export default async function startpairing(
                 false
         });
 
-    // Send Message Patch
+    // ==========================================
+    // SEND MESSAGE PATCH
+    // ==========================================
+
     if (!kaya._patched) {
-        const originalSend = kaya.sendMessage.bind(kaya);
-        kaya.sendMessage = async (jid, content, options = {}) => {
-            return await sendLimited(kaya, originalSend, jid, content, options);
-        };
-        kaya._patched = true;
-    }
 
-    tracker.connection = kaya;
+        const originalSend =
+            kaya.sendMessage.bind(
+                kaya
+            );
 
-    // Pairing Code logic
-    if (!state.creds.registered) {
-        setTimeout(async () => {
-            try {
-                if (rentbotTracker.get(number)?.connection !== kaya) return;
+        kaya.sendMessage =
+            async (
+                jid,
+                content,
+                options = {}
+            ) => {
 
-                const pairingFile = path.join(PAIRING_DIR, `pairing_${teleId}.json`);
-                if (fs.existsSync(pairingFile)) fs.unlinkSync(pairingFile);
-
-                let code = await kaya.requestPairingCode(number);
-                code = code?.match(/.{1,4}/g)?.join("-") || code;
-
-                console.log(`${logPrefix} 📟 Code de pairage généré : ${code}`);
-
-                fs.writeFileSync(
-                    pairingFile,
-                    JSON.stringify(
-                        { number: nexusDevNumber, code, userName, timestamp: new Date().toISOString() },
-                        null,
-                        2
-                    )
+                return await sendLimited(
+                    kaya,
+                    originalSend,
+                    jid,
+                    content,
+                    options
                 );
-            } catch (err) {
-                console.error(`${logPrefix} ❌ Erreur génération code:`, err.message);
-            }
-        }, 8000);
+            };
+
+        kaya._patched =
+            true;
     }
 
-    kaya.decodeJid = jid => {
-        if (!jid) return jid;
-        if (/:/g.test(jid)) {
-            const decode = jidDecode(jid) || {};
-            return (decode.user && decode.server) ? `${decode.user}@${decode.server}` : jid;
-        }
-        return jid;
-    };
+    tracker.connection =
+        kaya;
 
-    // Events (messages.upsert, messages.update, group-participants.update) identiques à ton code...
-    kaya.ev.on("messages.upsert", async chatUpdate => {
-        if (!isReady) return;
-        try {
-            const rawMsg = chatUpdate.messages[0];
-            if (!rawMsg?.message || rawMsg.key?.id?.startsWith("BAE5")) return;
-            const mek = smsg(kaya, rawMsg);
-            const uniqueCommands = new Set(commands.values());
-            for (const cmd of uniqueCommands) {
-                if (typeof cmd.detect === "function") {
-                    await cmd.detect(kaya, mek, mek.chat);
+    // ==========================================
+    // PAIRING CODE
+    // ==========================================
+
+    if (
+        !state.creds.registered
+    ) {
+
+        setTimeout(
+            async () => {
+
+                try {
+
+                    if (
+                        rentbotTracker
+                            .get(number)
+                            ?.connection !== kaya
+                    ) {
+                        return;
+                    }
+
+                    const pairingFile =
+                        path.join(
+                            PAIRING_DIR,
+                            `pairing_${teleId}.json`
+                        );
+
+                    if (
+                        fs.existsSync(
+                            pairingFile
+                        )
+                    ) {
+
+                        fs.unlinkSync(
+                            pairingFile
+                        );
+                    }
+
+                    let code =
+                        await kaya.requestPairingCode(
+                            number
+                        );
+
+                    code =
+                        code
+                            ?.match(
+                                /.{1,4}/g
+                            )
+                            ?.join("-") ||
+                        code;
+
+                    console.log(
+                        `${logPrefix} 📟 Code de pairage généré : ${code}`
+                    );
+
+                    fs.writeFileSync(
+                        pairingFile,
+                        JSON.stringify(
+                            {
+                                number:
+                                    nexusDevNumber,
+
+                                code,
+
+                                userName,
+
+                                timestamp:
+                                    new Date().toISOString()
+                            },
+                            null,
+                            2
+                        )
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        `${logPrefix} ❌ Erreur génération code:`,
+                        err.message
+                    );
                 }
-            }
-            await handler(kaya, mek, chatUpdate);
-        } catch (err) {
-            console.error(`${logPrefix} [MESSAGES ERROR]:`, err?.message || err);
-        }
-    });
 
-    kaya.ev.on("messages.update", async updates => {
-        if (!isReady) return;
-        try { await handleAntiDelete(kaya, updates); } catch (err) {}
-    });
+            },
+            8000
+        );
+    }
 
-    kaya.ev.on("group-participants.update", async update => {
-        if (!isReady) return;
-        try {
-            const uniqueCommands = new Set(commands.values());
-            for (const cmd of uniqueCommands) {
-                if (typeof cmd.participantUpdate === "function") {
-                    await cmd.participantUpdate(kaya, update);
-                }
-            }
-        } catch (err) {}
-    });
+    // ==========================================
+    // DECODE JID
+    // ==========================================
 
-    // Connection Update
-    kaya.ev.on("connection.update", async update => {
-        const { connection, lastDisconnect } = update;
+    kaya.decodeJid =
+        jid => {
 
-        if (connection === "open") {
-            if (rentbotTracker.get(number)?.connection !== kaya) return;
-            console.log(`${logPrefix} 🟢 Connexion réussie via MongoDB`);
-            isReady = true;
-            tracker.status = "connected";
-
-            try {
-                if (getSetting(number, "alwaysOnline", false)) {
-                    startAlwaysOnline(kaya);
-                }
-            } catch (err) {}
-
-            if (teleId && teleId !== "default") {
-                const pairingFile = path.join(PAIRING_DIR, `pairing_${teleId}.json`);
-                if (fs.existsSync(pairingFile)) fs.unlinkSync(pairingFile);
+            if (!jid) {
+                return jid;
             }
 
-            if (!tracker.isConnected) {
-                tracker.isConnected = true;
-                await sleep(4000);
-                const statusFile = path.join(process.cwd(), "utils", "update_status.json");
-                
-                if (fs.existsSync(statusFile)) {
-                    try { await sendConnectionOrUpdateMessage(kaya, number, statusFile); } catch (e) {}
-                } else if (!getSetting(number, "botWelcomedOnce", false)) {
-                    try {
-                        await sendConnectionOrUpdateMessage(kaya, number, statusFile);
-                        await setSetting(number, "botWelcomedOnce", true);
-                    } catch (e) {}
-                }
+            if (
+                /:/g.test(jid)
+            ) {
+
+                const decode =
+                    jidDecode(jid) ||
+                    {};
+
+                return (
+                    decode.user &&
+                    decode.server
+                )
+                    ? `${decode.user}@${decode.server}`
+                    : jid;
             }
-        }
 
-        if (connection === "close") {
-            isReady = false;
-            tracker.isConnected = false;
-            if (rentbotTracker.get(number)?.connection !== kaya) return;
+            return jid;
+        };
 
-            const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
-            console.log(`${logPrefix} 🔴 Connexion fermée. Code: ${statusCode}`);
+    // ==========================================
+    // MESSAGES UPSERT
+    // ==========================================
 
-            if (statusCode === DisconnectReason.loggedOut || statusCode === 403 || statusCode === 401) {
-                console.log(`${logPrefix} ⚠️ Session expirée ou rejetée (Code ${statusCode}). Nettoyage complet...`);
-                try { destroySendQueue(kaya); } catch {}
-                await forceCleanupSession(number, teleId);
+    kaya.ev.on(
+        "messages.upsert",
+        async chatUpdate => {
+
+            if (!isReady) {
                 return;
             }
 
-            try { destroySendQueue(kaya); } catch {}
+            try {
 
-            if (attempt < 10) {
-                const backoffDelay = Math.min(15000 * Math.pow(2, attempt), 5 * 60 * 1000);
-                await sleep(backoffDelay);
-                if (rentbotTracker.get(number)?.connection !== kaya) return;
-                startpairing(nexusDevNumber, teleId, userName, attempt + 1).catch(() => {});
-            } else {
-                await sleep(5 * 60 * 1000);
-                if (rentbotTracker.get(number)?.connection !== kaya) return;
-                startpairing(nexusDevNumber, teleId, userName, 0).catch(() => {});
+                const rawMsg =
+                    chatUpdate.messages[0];
+
+                if (
+                    !rawMsg?.message ||
+                    rawMsg.key?.id?.startsWith(
+                        "BAE5"
+                    )
+                ) {
+                    return;
+                }
+
+                const mek =
+                    smsg(
+                        kaya,
+                        rawMsg
+                    );
+
+                const uniqueCommands =
+                    new Set(
+                        commands.values()
+                    );
+
+                for (
+                    const cmd
+                    of uniqueCommands
+                ) {
+
+                    if (
+                        typeof cmd.detect ===
+                        "function"
+                    ) {
+
+                        await cmd.detect(
+                            kaya,
+                            mek,
+                            mek.chat
+                        );
+                    }
+                }
+
+                await handler(
+                    kaya,
+                    mek,
+                    chatUpdate
+                );
+
+            } catch (err) {
+
+                console.error(
+                    `${logPrefix} [MESSAGES ERROR]:`,
+                    err?.message ||
+                        err
+                );
             }
         }
-    });
+    );
 
-    kaya.ev.on("creds.update", () => {
-        if (rentbotTracker.get(number)?.connection === kaya) {
-            saveCreds().catch(() => {});
+    // ==========================================
+    // ANTI DELETE
+    // ==========================================
+
+    kaya.ev.on(
+        "messages.update",
+        async updates => {
+
+            if (!isReady) {
+                return;
+            }
+
+            try {
+
+                await handleAntiDelete(
+                    kaya,
+                    updates
+                );
+
+            } catch (err) {
+
+                console.error(
+                    "[ANTI-DELETE EVENT ERROR]:",
+                    err
+                );
+            }
         }
-    });
+    );
+
+    // ==========================================
+    // GROUP PARTICIPANTS
+    // ==========================================
+
+    kaya.ev.on(
+        "group-participants.update",
+        async update => {
+
+            if (!isReady) {
+                return;
+            }
+
+            try {
+
+                const uniqueCommands =
+                    new Set(
+                        commands.values()
+                    );
+
+                for (
+                    const cmd
+                    of uniqueCommands
+                ) {
+
+                    if (
+                        typeof cmd.participantUpdate ===
+                        "function"
+                    ) {
+
+                        await cmd.participantUpdate(
+                            kaya,
+                            update
+                        );
+                    }
+
+                }
+
+            } catch (err) {
+
+                console.error(
+                    "[GROUP PARTICIPANTS ERROR]:",
+                    err
+                );
+            }
+        }
+    );
+
+    // ==========================================
+    // CONNECTION UPDATE
+    // ==========================================
+
+    kaya.ev.on(
+        "connection.update",
+        async update => {
+
+            const {
+                connection,
+                lastDisconnect
+            } = update;
+
+            // ==========================================
+            // OPEN
+            // ==========================================
+
+            if (
+                connection === "open"
+            ) {
+
+                if (
+                    rentbotTracker
+                        .get(number)
+                        ?.connection !== kaya
+                ) {
+                    return;
+                }
+
+                console.log(
+                    `${logPrefix} 🟢 Connexion réussie`
+                );
+
+                isReady =
+                    true;
+
+                tracker.status =
+                    "connected";
+
+                // ==========================================
+                // MODE ONLINE
+                // ==========================================
+
+                try {
+
+                    const onlineEnabled =
+                        getSetting(
+                            number,
+                            "alwaysOnline",
+                            false
+                        );
+
+                    if (
+                        onlineEnabled
+                    ) {
+
+                        startAlwaysOnline(
+                            kaya
+                        );
+                    }
+
+                } catch (err) {
+
+                    console.error(
+                        `${logPrefix} [ONLINE ERROR]:`,
+                        err.message
+                    );
+                }
+
+                // ==========================================
+                // SUPPRESSION PAIRING FILE
+                // ==========================================
+
+                if (
+                    teleId &&
+                    teleId !== "default"
+                ) {
+
+                    const pairingFile =
+                        path.join(
+                            PAIRING_DIR,
+                            `pairing_${teleId}.json`
+                        );
+
+                    if (
+                        fs.existsSync(
+                            pairingFile
+                        )
+                    ) {
+
+                        fs.unlinkSync(
+                            pairingFile
+                        );
+                    }
+                }
+
+                // ==========================================
+                // MESSAGE INITIAL
+                // ==========================================
+
+                if (
+                    !tracker.isConnected
+                ) {
+
+                    tracker.isConnected =
+                        true;
+
+                    await sleep(
+                        4000
+                    );
+
+                    const statusFile =
+                        path.join(
+                            process.cwd(),
+                            "utils",
+                            "update_status.json"
+                        );
+
+                    // ==========================================
+                    // MESSAGE UPDATE
+                    // ==========================================
+
+                    if (
+                        fs.existsSync(
+                            statusFile
+                        )
+                    ) {
+
+                        try {
+
+                            await sendConnectionOrUpdateMessage(
+                                kaya,
+                                number,
+                                statusFile
+                            );
+
+                        } catch (e) {
+
+                            console.error(
+                                `${logPrefix} ❌ Échec envoi message MAJ:`,
+                                e.message
+                            );
+                        }
+
+                    } else {
+
+                        // ==========================================
+                        // PREMIÈRE CONNEXION
+                        // ==========================================
+
+                        const isWelcomed =
+                            getSetting(
+                                number,
+                                "botWelcomedOnce",
+                                false
+                            );
+
+                        if (
+                            !isWelcomed
+                        ) {
+
+                            try {
+
+                                await sendConnectionOrUpdateMessage(
+                                    kaya,
+                                    number,
+                                    statusFile
+                                );
+
+                                await setSetting(
+                                    number,
+                                    "botWelcomedOnce",
+                                    true
+                                );
+
+                            } catch (e) {
+
+                                console.error(
+                                    `${logPrefix} ❌ Échec envoi message initial:`,
+                                    e.message
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // CLOSE
+            // ==========================================
+
+            if (
+                connection === "close"
+            ) {
+
+                isReady =
+                    false;
+
+                tracker.isConnected =
+                    false;
+
+                if (
+                    rentbotTracker
+                        .get(number)
+                        ?.connection !== kaya
+                ) {
+                    return;
+                }
+
+                const statusCode =
+                    new Boom(
+                        lastDisconnect?.error
+                    )
+                        ?.output
+                        ?.statusCode;
+
+                console.log(
+                    `${logPrefix} 🔴 Connexion fermée. Code: ${statusCode}`
+                );
+
+                // ==========================================
+                // SESSION DÉCONNECTÉE
+                // ==========================================
+
+                if (
+                    statusCode ===
+                        DisconnectReason.loggedOut ||
+                    statusCode === 403
+                ) {
+
+                    console.log(
+                        `${logPrefix} ❌ Session fermée définitivement.`
+                    );
+
+                    try {
+
+                        destroySendQueue(
+                            kaya
+                        );
+
+                    } catch {}
+
+                    forceCleanupSession(
+                        number,
+                        teleId
+                    );
+
+                    return;
+                }
+
+                // ==========================================
+                // NETTOYAGE DE LA QUEUE
+                // ==========================================
+
+                try {
+
+                    destroySendQueue(
+                        kaya
+                    );
+
+                } catch {}
+
+                // ==========================================
+                // RECONNEXION AVEC BACKOFF
+                // ==========================================
+
+                if (
+                    attempt < 10
+                ) {
+
+                    const backoffDelay =
+                        Math.min(
+                            15000 *
+                                Math.pow(
+                                    2,
+                                    attempt
+                                ),
+                            5 * 60 * 1000
+                        );
+
+                    console.log(
+                        `${logPrefix} ⚠️ Nouvelle tentative ${attempt + 1}/10 dans ${Math.ceil(backoffDelay / 1000)}s...`
+                    );
+
+                    await sleep(
+                        backoffDelay
+                    );
+
+                    if (
+                        rentbotTracker
+                            .get(number)
+                            ?.connection !== kaya
+                    ) {
+                        return;
+                    }
+
+                    startpairing(
+                        nexusDevNumber,
+                        teleId,
+                        userName,
+                        attempt + 1
+                    ).catch(error => {
+
+                        console.error(
+                            `${logPrefix} ❌ Erreur reconnexion:`,
+                            error.message
+                        );
+                    });
+
+                } else {
+
+                    console.log(
+                        `${logPrefix} 🛑 Trop de tentatives. Pause de 5 minutes avant nouvelle tentative.`
+                    );
+
+                    await sleep(
+                        5 * 60 * 1000
+                    );
+
+                    if (
+                        rentbotTracker
+                            .get(number)
+                            ?.connection !== kaya
+                    ) {
+                        return;
+                    }
+
+                    startpairing(
+                        nexusDevNumber,
+                        teleId,
+                        userName,
+                        0
+                    ).catch(error => {
+
+                        console.error(
+                            `${logPrefix} ❌ Erreur reconnexion finale:`,
+                            error.message
+                        );
+                    });
+                }
+            }
+        }
+    );
+
+    // ==========================================
+    // SAVE CREDENTIALS
+    // ==========================================
+
+    kaya.ev.on(
+        "creds.update",
+        () => {
+
+            if (
+                rentbotTracker
+                    .get(number)
+                    ?.connection === kaya
+            ) {
+
+                saveCreds().catch(
+                    () => {}
+                );
+            }
+        }
+    );
 
     return kaya;
 }
 
-// Normalisation message smsg inchangée...
-function smsg(kaya, m) {
-    if (!m) return m;
-    if (m.key) {
-        m.id = m.key.id;
-        m.chat = m.key.remoteJid;
-        m.fromMe = m.key.fromMe;
-        m.isGroup = m.chat?.endsWith("@g.us");
-        m.sender = kaya.decodeJid(m.fromMe ? kaya.user.id : m.participant || m.key.participant || m.chat || "");
+// ==========================================
+// NORMALISATION MESSAGE
+// ==========================================
+
+function smsg(
+    kaya,
+    m
+) {
+
+    if (!m) {
+        return m;
     }
+
+    if (m.key) {
+
+        m.id =
+            m.key.id;
+
+        m.chat =
+            m.key.remoteJid;
+
+        m.fromMe =
+            m.key.fromMe;
+
+        m.isGroup =
+            m.chat?.endsWith(
+                "@g.us"
+            );
+
+        m.sender =
+            kaya.decodeJid(
+                m.fromMe
+                    ? kaya.user.id
+                    : m.participant ||
+                      m.key.participant ||
+                      m.chat ||
+                      ""
+            );
+    }
+
     if (m.message) {
-        m.mtype = getContentType(m.message);
-        m.msg = m.message[m.mtype] || {};
-        m.body = m.message.conversation || m.msg?.caption || m.msg?.text || "";
-        const quoted = m.msg?.contextInfo?.quotedMessage || null;
+
+        m.mtype =
+            getContentType(
+                m.message
+            );
+
+        m.msg =
+            m.message[
+                m.mtype
+            ] || {};
+
+        m.body =
+            m.message.conversation ||
+            m.msg?.caption ||
+            m.msg?.text ||
+            "";
+
+        const quoted =
+            m.msg
+                ?.contextInfo
+                ?.quotedMessage ||
+            null;
+
         if (quoted) {
-            const type = getContentType(quoted);
-            m.quoted = quoted[type];
-            if (typeof m.quoted === "string") m.quoted = { text: m.quoted };
-            m.quoted.mtype = type;
-            m.quoted.sender = kaya.decodeJid(m.msg.contextInfo.participant);
-            m.quoted.text = m.quoted.text || m.quoted.caption || "";
+
+            const type =
+                getContentType(
+                    quoted
+                );
+
+            m.quoted =
+                quoted[type];
+
+            if (
+                typeof m.quoted ===
+                "string"
+            ) {
+
+                m.quoted = {
+                    text:
+                        m.quoted
+                };
+            }
+
+            m.quoted.mtype =
+                type;
+
+            m.quoted.sender =
+                kaya.decodeJid(
+                    m.msg
+                        .contextInfo
+                        .participant
+                );
+
+            m.quoted.text =
+                m.quoted.text ||
+                m.quoted.caption ||
+                "";
         }
     }
+
     return m;
 }
