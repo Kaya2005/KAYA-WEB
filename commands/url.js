@@ -1,5 +1,4 @@
 import { downloadContentFromMessage } from "@whiskeysockets/baileys";
-import FormData from "form-data";
 
 export default {
     name: "url",
@@ -9,11 +8,11 @@ export default {
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            // Détection de l'image (réponse ou message direct)
-            const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            const imageMsg = mek.message?.imageMessage || quoted?.imageMessage;
+            // Utilisation de mek.quoted pour une détection fiable
+            const quoted = mek.quoted ? mek.quoted : mek;
+            const mime = (quoted.msg || quoted).mimetype || '';
 
-            if (!imageMsg) {
+            if (!/image/.test(mime)) {
                 return kaya.sendMessage(
                     from,
                     {
@@ -25,45 +24,47 @@ export default {
 
             await kaya.sendPresenceUpdate("composing", from);
 
-            // Téléchargement de l'image
-            const stream = await downloadContentFromMessage(imageMsg, "image");
-            const chunks = [];
+            // Téléchargement sécurisé de l'image
+            let stream;
+            try {
+                stream = await downloadContentFromMessage(quoted, "image");
+            } catch (dlError) {
+                console.error('❌ Erreur téléchargement image :', dlError);
+                return kaya.sendMessage(from, { text: "❌ Impossible de télécharger cette image." }, { quoted: mek });
+            }
 
+            const chunks = [];
             for await (const chunk of stream) {
                 chunks.push(chunk);
             }
-
             const buffer = Buffer.concat(chunks);
 
-            if (!buffer || buffer.length < 100) {
+            if (!buffer || buffer.length === 0) {
                 return kaya.sendMessage(
                     from,
                     {
-                        text: "❌ Impossible de télécharger cette image."
+                        text: "❌ L'image est vide ou corrompue."
                     },
                     { quoted: mek }
                 );
             }
 
-            // Upload vers Catbox via form.submit (plus robuste sur les panels)
-            const form = new FormData();
-            form.append("reqtype", "fileupload");
-            form.append("fileToUpload", buffer, {
-                filename: "image.jpg",
-                contentType: "image/jpeg"
+            // Utilisation de fetch natif avec FormData et Blob (évite les ECONNRESET de form-data)
+            const formData = new FormData();
+            formData.append("reqtype", "fileupload");
+            const blob = new Blob([buffer], { type: mime || "image/jpeg" });
+            formData.append("fileToUpload", blob, "image.jpg");
+
+            const response = await fetch("https://catbox.moe/user/api.php", {
+                method: "POST",
+                body: formData
             });
 
-            const url = await new Promise((resolve, reject) => {
-                form.submit("https://catbox.moe/user/api.php", (err, res) => {
-                    if (err) return reject(err);
-                    let rawData = "";
-                    res.on("data", (chunk) => { rawData += chunk; });
-                    res.on("end", () => {
-                        resolve(rawData.trim());
-                    });
-                    res.on("error", (e) => { reject(e); });
-                });
-            });
+            if (!response.ok) {
+                throw new Error(`Erreur serveur Catbox (Statut ${response.status})`);
+            }
+
+            const url = (await response.text()).trim();
 
             if (!url.startsWith("http")) {
                 throw new Error(url || "Réponse invalide de Catbox");
@@ -78,7 +79,7 @@ export default {
             );
 
         } catch (err) {
-            console.error(err);
+            console.error('❌ Erreur critique dans la commande url :', err);
 
             await kaya.sendMessage(
                 from,

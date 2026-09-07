@@ -17,10 +17,8 @@ export default {
                 return await kaya.sendMessage(from, { text: '⚠️ Veuillez répondre à une image ou une vidéo.' }, { quoted: mek });
             }
 
-            // Avertissement de chargement
             await kaya.sendMessage(from, { text: '⏳ Création du sticker en cours...' }, { quoted: mek }).catch(() => {});
 
-            // Téléchargement sécurisé du média
             let stream;
             try {
                 const mediaType = mime.split('/')[0];
@@ -44,19 +42,24 @@ export default {
                 return await kaya.sendMessage(from, { text: '❌ Le fichier est vide ou corrompu.' }, { quoted: mek });
             }
 
+            // Sécurité : Limiter la taille maximale à 10 Mo pour éviter les crashs mémoire (glibc crash)
+            const MAX_SIZE = 10 * 1024 * 1024; 
+            if (buffer.length > MAX_SIZE) {
+                return await kaya.sendMessage(from, { text: '❌ Le fichier est trop volumineux (Maximum 10 Mo).' }, { quoted: mek });
+            }
+
             const stickerOptions = {
                 packname: 'KAYA-MD',
                 author: 'kaya-tech',
                 type: /video/.test(mime) ? StickerTypes.ANIMATED : StickerTypes.FULL
             };
 
-            // Isolation de la génération EXIF pour éviter les crashs de socket
             let stickerBuffer;
             try {
                 stickerBuffer = await addExif(buffer, stickerOptions);
             } catch (exifError) {
                 console.error('❌ Erreur génération EXIF / Sticker :', exifError);
-                return await kaya.sendMessage(from, { text: '❌ Erreur lors du traitement du sticker (fichier trop lourd ou format non supporté).' }, { quoted: mek });
+                return await kaya.sendMessage(from, { text: '❌ Erreur lors du traitement du sticker (format non supporté).' }, { quoted: mek });
             }
 
             if (!stickerBuffer || stickerBuffer.length === 0) {
