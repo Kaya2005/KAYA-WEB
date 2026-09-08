@@ -2,8 +2,8 @@ import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
     name: 'url',
-    alias: ['tourl', 'catbox', 'imgurl'],
-    description: 'Convert a replied image or video into a public URL',
+    alias: ['tourl', 'telegraph', 'imgurl'],
+    description: 'Convert a replied image or video into a public Telegra.ph URL',
     category: 'Tools',
 
     async execute(kaya, mek, from, args, prefix) {
@@ -59,42 +59,40 @@ export default {
                 );
             }
 
-            // Determine correct file extension
+            // Determine correct file extension and MIME type for Telegra.ph
             let ext = 'jpg';
-            if (mime.includes('png')) ext = 'png';
-            else if (mime.includes('webp')) ext = 'webp';
-            else if (mime.includes('mp4')) ext = 'mp4';
-            else if (mime.includes('gif')) ext = 'gif';
+            let uploadMime = 'image/jpeg';
+            if (mime.includes('png')) { ext = 'png'; uploadMime = 'image/png'; }
+            else if (mime.includes('webp')) { ext = 'webp'; uploadMime = 'image/webp'; }
+            else if (mime.includes('mp4')) { ext = 'mp4'; uploadMime = 'video/mp4'; }
+            else if (mime.includes('gif')) { ext = 'gif'; uploadMime = 'image/gif'; }
 
-            // Native fetch with FormData and Blob for Catbox upload
+            // Upload to Telegra.ph API
             const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            const blob = new Blob([buffer], { type: mime });
-            formData.append('fileToUpload', blob, `media_${Date.now()}.${ext}`);
+            const blob = new Blob([buffer], { type: uploadMime });
+            formData.append('file', blob, `media_${Date.now()}.${ext}`);
 
-            // Ajout d'un User-Agent pour éviter le blocage 412 de Catbox sur les hébergeurs Cloud (Railway)
-            const response = await fetch('https://catbox.moe/user/api.php', {
+            const response = await fetch('https://telegra.ph/upload', {
                 method: 'POST',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
                 body: formData
             });
 
             if (!response.ok) {
-                throw new Error(`Catbox server error (Status ${response.status})`);
+                throw new Error(`Telegra.ph server error (Status ${response.status})`);
             }
 
-            const url = (await response.text()).trim();
+            const result = await response.json();
 
-            if (!url.startsWith('http')) {
-                throw new Error(url || 'Invalid response from Catbox');
+            if (result.error || !result[0]?.src) {
+                throw new Error(result.error || 'Invalid response from Telegra.ph');
             }
+
+            const mediaUrl = `https://telegra.ph${result[0].src}`;
 
             await kaya.sendMessage(
                 from,
                 {
-                    text: `✅ *Media uploaded successfully!*\n\n🔗 ${url}`
+                    text: `✅ *Media uploaded successfully!*\n\n🔗 ${mediaUrl}`
                 },
                 { quoted: mek }
             );
