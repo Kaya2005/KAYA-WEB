@@ -36,6 +36,16 @@ export default {
                 );
             }
 
+            // Vérification de la taille (Limite stricte de 5 Mo pour Telegra.ph)
+            const MAX_SIZE = 5 * 1024 * 1024;
+            if (mediaMsg.fileLength && Number(mediaMsg.fileLength) > MAX_SIZE) {
+                return kaya.sendMessage(
+                    from,
+                    { text: '❌ Le fichier est trop volumineux pour Telegra.ph (Maximum 5 Mo).' },
+                    { quoted: mek }
+                );
+            }
+
             await kaya.sendPresenceUpdate('composing', from);
 
             // Secure media download
@@ -59,7 +69,16 @@ export default {
                 );
             }
 
-            // Determine correct file extension and MIME type for Telegra.ph
+            // Sécurité supplémentaire sur la taille du buffer réel téléchargé
+            if (buffer.length > MAX_SIZE) {
+                return kaya.sendMessage(
+                    from,
+                    { text: '❌ Le fichier dépasse la limite autorisée de 5 Mo.' },
+                    { quoted: mek }
+                );
+            }
+
+            // Détermination de l'extension et du type MIME correct
             let ext = 'jpg';
             let uploadMime = 'image/jpeg';
             if (mime.includes('png')) { ext = 'png'; uploadMime = 'image/png'; }
@@ -67,10 +86,10 @@ export default {
             else if (mime.includes('mp4')) { ext = 'mp4'; uploadMime = 'video/mp4'; }
             else if (mime.includes('gif')) { ext = 'gif'; uploadMime = 'image/gif'; }
 
-            // Upload to Telegra.ph API
+            // Préparation des données pour l'API Telegra.ph
             const formData = new FormData();
             const blob = new Blob([buffer], { type: uploadMime });
-            formData.append('file', blob, `media_${Date.now()}.${ext}`);
+            formData.append('file', blob, `file_${Date.now()}.${ext}`);
 
             const response = await fetch('https://telegra.ph/upload', {
                 method: 'POST',
