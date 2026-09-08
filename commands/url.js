@@ -72,8 +72,12 @@ export default {
             const blob = new Blob([buffer], { type: mime });
             formData.append('fileToUpload', blob, `media_${Date.now()}.${ext}`);
 
+            // Ajout d'un User-Agent pour éviter le blocage 412 de Catbox sur les hébergeurs Cloud (Railway)
             const response = await fetch('https://catbox.moe/user/api.php', {
                 method: 'POST',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
                 body: formData
             });
 

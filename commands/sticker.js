@@ -42,8 +42,6 @@ export default {
                 return await kaya.sendMessage(from, { text: '❌ The file is too large (Maximum 10 MB).' }, { quoted: mek });
             }
 
-            await kaya.sendMessage(from, { text: '⏳ Creating sticker...' }, { quoted: mek }).catch(() => {});
-
             // Downloading media stream
             const typeDownload = mime.includes('video') ? 'video' : 'image';
             const stream = await downloadContentFromMessage(mediaMsg, typeDownload);
@@ -59,7 +57,7 @@ export default {
                 return await kaya.sendMessage(from, { text: '❌ Unable to download or read this media.' }, { quoted: mek });
             }
 
-            // Ultra-stable conversion to WebP via Sharp (no risk of bot crash)
+            // Ultra-stable conversion to WebP via Sharp with KAYA BOT metadata injection
             let webpBuffer;
             
             if (mime.includes('video') || mime.includes('gif')) {
@@ -82,7 +80,7 @@ export default {
                     .toBuffer();
             }
 
-            // Sending the generated sticker
+            // Sending the generated sticker directly without any text message
             await kaya.sendMessage(
                 from,
                 { sticker: webpBuffer },

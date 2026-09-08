@@ -26,8 +26,6 @@ export default {
                 );
             }
 
-            await kaya.sendMessage(from, { text: '⏳ Stealing sticker...' }, { quoted: mek }).catch(() => {});
-
             // Download sticker stream
             const stream = await downloadContentFromMessage(stickerMsg, 'sticker');
             const chunks = [];
@@ -46,11 +44,9 @@ export default {
             const input = args.join(' ');
             const [packName, authorName] = input.includes('|') 
                 ? input.split('|').map(s => s.trim()) 
-                : [input || 'KAYA-MD', 'kaya-tech'];
+                : [input || 'KAYA-BOT', 'kaya-tech'];
 
-            // Process and re-encode via Sharp (completely avoiding unstable native wrapper bugs)
-            // Note: Custom EXIF metadata injection requires specialized low-level webp structures, 
-            // but Sharp guarantees 100% stability and clean conversion without crashing the bot.
+            // Process and re-encode via Sharp
             const webpBuffer = await sharp(buffer, { animated: true })
                 .resize(512, 512, {
                     fit: 'contain',
@@ -59,8 +55,43 @@ export default {
                 .webp({ quality: 80, loop: 0 })
                 .toBuffer();
 
-            // Send the processed sticker
-            await kaya.sendMessage(from, { sticker: webpBuffer }, { quoted: mek });
+            // Injection des métadonnées EXIF (Packname & Author) pour WhatsApp
+            const exifAttr = JSON.parse(`{
+                "sticker-pack-id": "https://github.com/Kaya-tech/kaya-bot",
+                "sticker-pack-name": "${packName}",
+                "sticker-pack-publisher": "${authorName}",
+                "emojis": ["🤩", "🎉"]
+            }`);
+
+            const exifHeader = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00]);
+            const jsonBuffer = Buffer.from(JSON.stringify(exifAttr), 'utf-8');
+            const exif = Buffer.concat([exifHeader, jsonBuffer]);
+            exif.writeUIntLE(jsonBuffer.length, 14, 4);
+
+            // Construction du fichier WebP final avec les métadonnées EXIF intégrées
+            // Un fichier WebP standard utilise le conteneur RIFF
+            let finalBuffer = webpBuffer;
+            try {
+                // Recherche du chunk EXIF si présent pour le remplacer proprement, ou ajout direct
+                const rifx = webpBuffer.subarray(0, 4).toString() === 'RIFF';
+                if (rifx) {
+                    const exifChunk = Buffer.concat([
+                        Buffer.from('EXIF', 'ascii'),
+                        Buffer.alloc(4),
+                        exif
+                    ]);
+                    exifChunk.writeUInt32LE(exif.length, 4);
+                    // Assemblage propre du RIFF WebP avec le chunk EXIF
+                    finalBuffer = Buffer.concat([webpBuffer, exifChunk]);
+                    // Mise à jour de la taille globale du RIFF Header
+                    finalBuffer.writeUInt32LE(finalBuffer.length - 8, 4);
+                }
+            } catch (e) {
+                console.error('⚠️ Erreur mineure injection EXIF, envoi du sticker brut :', e);
+            }
+
+            // Send the processed sticker directly without any text message
+            await kaya.sendMessage(from, { sticker: finalBuffer }, { quoted: mek });
 
         } catch (error) {
             console.error('❌ Critical error in take command:', error);
