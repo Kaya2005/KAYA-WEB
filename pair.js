@@ -1,4 +1,3 @@
-
 // ==================== pair.js ====================
 
 import {
@@ -325,7 +324,7 @@ export async function restoreSessions() {
         }
 
         console.log(
-            `[RESTORE] 🔄 Restauration de la session : ${folder} (TeleID: ${teleId})`
+            `[RESTORE] 🔄 Restauration de la session : ${folder} (ID: ${teleId})`
         );
 
         startpairing(
@@ -340,8 +339,6 @@ export async function restoreSessions() {
             );
         });
 
-        // Évite de lancer toutes les sessions
-        // exactement au même moment.
         await new Promise(
             resolve =>
                 setTimeout(
@@ -442,10 +439,6 @@ export function forceCleanupSession(
             cleanNumber
         );
 
-    // ==========================================
-    // ARRÊT SOCKET + QUEUE
-    // ==========================================
-
     if (
         rentbotTracker.has(
             cleanNumber
@@ -516,10 +509,6 @@ export function forceCleanupSession(
         );
     }
 
-    // ==========================================
-    // SESSION
-    // ==========================================
-
     if (
         fs.existsSync(
             sessionPath
@@ -531,16 +520,26 @@ export function forceCleanupSession(
         );
     }
 
-    // ==========================================
-    // PAIRING FILE
-    // ==========================================
+    const pairingFile =
+        path.join(
+            PAIRING_DIR,
+            `pairing_${cleanNumber}.json`
+        );
+
+    if (
+        fs.existsSync(
+            pairingFile
+        )
+    ) {
+        fs.unlinkSync(pairingFile);
+    }
 
     if (
         teleId &&
         teleId !== "default"
     ) {
 
-        const pairingFile =
+        const altPairingFile =
             path.join(
                 PAIRING_DIR,
                 `pairing_${teleId}.json`
@@ -548,81 +547,15 @@ export function forceCleanupSession(
 
         if (
             fs.existsSync(
-                pairingFile
+                altPairingFile
             )
         ) {
 
             fs.unlinkSync(
-                pairingFile
+                altPairingFile
             );
         }
-
-    } else {
-
-        if (
-            fs.existsSync(
-                PAIRING_DIR
-            )
-        ) {
-
-            const files =
-                fs.readdirSync(
-                    PAIRING_DIR
-                );
-
-            for (
-                const file of files
-            ) {
-
-                if (
-                    file.startsWith(
-                        "pairing_"
-                    ) &&
-                    file.endsWith(
-                        ".json"
-                    )
-                ) {
-
-                    try {
-
-                        const filePath =
-                            path.join(
-                                PAIRING_DIR,
-                                file
-                            );
-
-                        const data =
-                            JSON.parse(
-                                fs.readFileSync(
-                                    filePath,
-                                    "utf-8"
-                                )
-                            );
-
-                        if (
-                            (
-                                data.number ||
-                                ""
-                            ).replace(
-                                /[^0-9]/g,
-                                ""
-                            ) === cleanNumber
-                        ) {
-
-                            fs.unlinkSync(
-                                filePath
-                            );
-                        }
-
-                    } catch {}
-                }
-            }
-        }
     }
-
-    // ==========================================
-    // CONFIG
-    // ==========================================
 
     const configDir =
         path.join(
@@ -772,10 +705,6 @@ export default async function startpairing(
     const logPrefix =
         `[${number} | ID:${instanceId}]`;
 
-    // ==========================================
-    // FERMER ANCIENNE INSTANCE
-    // ==========================================
-
     if (
         rentbotTracker.has(
             number
@@ -846,10 +775,6 @@ export default async function startpairing(
         );
     }
 
-    // ==========================================
-    // TRACKER
-    // ==========================================
-
     let isReady =
         false;
 
@@ -863,10 +788,6 @@ export default async function startpairing(
         number,
         tracker
     );
-
-    // ==========================================
-    // SESSION PATH
-    // ==========================================
 
     const sessionPath =
         path.join(
@@ -887,10 +808,6 @@ export default async function startpairing(
             }
         );
     }
-
-    // ==========================================
-    // METADATA
-    // ==========================================
 
     const metadataPath =
         path.join(
@@ -959,10 +876,6 @@ export default async function startpairing(
         )
     );
 
-    // ==========================================
-    // AUTH STATE
-    // ==========================================
-
     const {
         state,
         saveCreds
@@ -972,10 +885,6 @@ export default async function startpairing(
         );
 
     await sleep(2000);
-
-    // ==========================================
-    // SOCKET
-    // ==========================================
 
     const kaya =
         makeWASocket({
@@ -1012,10 +921,6 @@ export default async function startpairing(
                 false
         });
 
-    // ==========================================
-    // SEND MESSAGE PATCH
-    // ==========================================
-
     if (!kaya._patched) {
 
         const originalSend =
@@ -1046,10 +951,6 @@ export default async function startpairing(
     tracker.connection =
         kaya;
 
-    // ==========================================
-    // PAIRING CODE
-    // ==========================================
-
     if (
         !state.creds.registered
     ) {
@@ -1070,8 +971,13 @@ export default async function startpairing(
                     const pairingFile =
                         path.join(
                             PAIRING_DIR,
-                            `pairing_${teleId}.json`
+                            `pairing_${number}.json`
                         );
+
+                    const altPairingFile =
+                        teleId && teleId !== "default"
+                            ? path.join(PAIRING_DIR, `pairing_${teleId}.json`)
+                            : null;
 
                     if (
                         fs.existsSync(
@@ -1081,6 +987,18 @@ export default async function startpairing(
 
                         fs.unlinkSync(
                             pairingFile
+                        );
+                    }
+
+                    if (
+                        altPairingFile &&
+                        fs.existsSync(
+                            altPairingFile
+                        )
+                    ) {
+
+                        fs.unlinkSync(
+                            altPairingFile
                         );
                     }
 
@@ -1101,24 +1019,33 @@ export default async function startpairing(
                         `${logPrefix} 📟 Code de pairage généré : ${code}`
                     );
 
+                    const payload = JSON.stringify(
+                        {
+                            number:
+                                nexusDevNumber,
+
+                            code,
+
+                            userName,
+
+                            timestamp:
+                                new Date().toISOString()
+                        },
+                        null,
+                        2
+                    );
+
                     fs.writeFileSync(
                         pairingFile,
-                        JSON.stringify(
-                            {
-                                number:
-                                    nexusDevNumber,
-
-                                code,
-
-                                userName,
-
-                                timestamp:
-                                    new Date().toISOString()
-                            },
-                            null,
-                            2
-                        )
+                        payload
                     );
+
+                    if (altPairingFile) {
+                        fs.writeFileSync(
+                            altPairingFile,
+                            payload
+                        );
+                    }
 
                 } catch (err) {
 
@@ -1129,13 +1056,9 @@ export default async function startpairing(
                 }
 
             },
-            8000
+            3000
         );
     }
-
-    // ==========================================
-    // DECODE JID
-    // ==========================================
 
     kaya.decodeJid =
         jid => {
@@ -1162,10 +1085,6 @@ export default async function startpairing(
 
             return jid;
         };
-
-    // ==========================================
-    // MESSAGES UPSERT
-    // ==========================================
 
     kaya.ev.on(
         "messages.upsert",
@@ -1235,10 +1154,6 @@ export default async function startpairing(
         }
     );
 
-    // ==========================================
-    // ANTI DELETE
-    // ==========================================
-
     kaya.ev.on(
         "messages.update",
         async updates => {
@@ -1263,10 +1178,6 @@ export default async function startpairing(
             }
         }
     );
-
-    // ==========================================
-    // GROUP PARTICIPANTS
-    // ==========================================
 
     kaya.ev.on(
         "group-participants.update",
@@ -1311,10 +1222,6 @@ export default async function startpairing(
         }
     );
 
-    // ==========================================
-    // CONNECTION UPDATE
-    // ==========================================
-
     kaya.ev.on(
         "connection.update",
         async update => {
@@ -1323,10 +1230,6 @@ export default async function startpairing(
                 connection,
                 lastDisconnect
             } = update;
-
-            // ==========================================
-            // OPEN
-            // ==========================================
 
             if (
                 connection === "open"
@@ -1349,10 +1252,6 @@ export default async function startpairing(
 
                 tracker.status =
                     "connected";
-
-                // ==========================================
-                // MODE ONLINE
-                // ==========================================
 
                 try {
 
@@ -1380,16 +1279,29 @@ export default async function startpairing(
                     );
                 }
 
-                // ==========================================
-                // SUPPRESSION PAIRING FILE
-                // ==========================================
+                const pairingFile =
+                    path.join(
+                        PAIRING_DIR,
+                        `pairing_${number}.json`
+                    );
+
+                if (
+                    fs.existsSync(
+                        pairingFile
+                    )
+                ) {
+
+                    fs.unlinkSync(
+                        pairingFile
+                    );
+                }
 
                 if (
                     teleId &&
                     teleId !== "default"
                 ) {
 
-                    const pairingFile =
+                    const altPairingFile =
                         path.join(
                             PAIRING_DIR,
                             `pairing_${teleId}.json`
@@ -1397,19 +1309,15 @@ export default async function startpairing(
 
                     if (
                         fs.existsSync(
-                            pairingFile
+                            altPairingFile
                         )
                     ) {
 
                         fs.unlinkSync(
-                            pairingFile
+                            altPairingFile
                         );
                     }
                 }
-
-                // ==========================================
-                // MESSAGE INITIAL
-                // ==========================================
 
                 if (
                     !tracker.isConnected
@@ -1428,10 +1336,6 @@ export default async function startpairing(
                             "utils",
                             "update_status.json"
                         );
-
-                    // ==========================================
-                    // MESSAGE UPDATE
-                    // ==========================================
 
                     if (
                         fs.existsSync(
@@ -1456,10 +1360,6 @@ export default async function startpairing(
                         }
 
                     } else {
-
-                        // ==========================================
-                        // PREMIÈRE CONNEXION
-                        // ==========================================
 
                         const isWelcomed =
                             getSetting(
@@ -1498,10 +1398,6 @@ export default async function startpairing(
                 }
             }
 
-            // ==========================================
-            // CLOSE
-            // ==========================================
-
             if (
                 connection === "close"
             ) {
@@ -1531,10 +1427,6 @@ export default async function startpairing(
                     `${logPrefix} 🔴 Connexion fermée. Code: ${statusCode}`
                 );
 
-                // ==========================================
-                // SESSION DÉCONNECTÉE
-                // ==========================================
-
                 if (
                     statusCode ===
                         DisconnectReason.loggedOut ||
@@ -1561,10 +1453,6 @@ export default async function startpairing(
                     return;
                 }
 
-                // ==========================================
-                // NETTOYAGE DE LA QUEUE
-                // ==========================================
-
                 try {
 
                     destroySendQueue(
@@ -1572,10 +1460,6 @@ export default async function startpairing(
                     );
 
                 } catch {}
-
-                // ==========================================
-                // RECONNEXION AVEC BACKOFF
-                // ==========================================
 
                 if (
                     attempt < 10
@@ -1654,10 +1538,6 @@ export default async function startpairing(
             }
         }
     );
-
-    // ==========================================
-    // SAVE CREDENTIALS
-    // ==========================================
 
     kaya.ev.on(
         "creds.update",
