@@ -4,9 +4,19 @@ import fs from 'fs';
 import path from 'path';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const PAIRING_FOLDER = './richstore/pairing';
+
+// ==========================================
+// STOCKAGE UNIVERSEL AUTO-DÉTECTÉ
+// ==========================================
+const STORAGE_DIR =
+    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+    process.env.RENDER_DISK_PATH ||
+    process.env.STORAGE_DIR ||
+    path.join(process.cwd(), "data");
+
+const PAIRING_FOLDER = path.join(STORAGE_DIR, 'richstore', 'pairing');
 const COOLDOWN_FILE = path.join(PAIRING_FOLDER, 'cooldown.json');
-const COOLDOWN_MS = 30000; // 30 seconds
+const COOLDOWN_MS = 30000; // 30 secondes
 
 export default {
   name: 'pair',
@@ -18,7 +28,10 @@ export default {
     try {
       const sender = mek.sender;
       
-      if (!fs.existsSync(PAIRING_FOLDER)) fs.mkdirSync(PAIRING_FOLDER, { recursive: true });
+      // Création automatique du dossier de stockage universel s'il n'existe pas
+      if (!fs.existsSync(PAIRING_FOLDER)) {
+        fs.mkdirSync(PAIRING_FOLDER, { recursive: true });
+      }
 
       if (!args[0]) {
         return await sendWithBotImage(kaya, from, sender, { 
@@ -30,7 +43,7 @@ export default {
       const rawInput = args[0];
       const targetNumber = rawInput.replace(/[^0-9]/g, '');
 
-      // 🔍 NUMBER FORMAT CHECK (Detects '+', letters, or invalid length)
+      // 🔍 VÉRIFICATION DU FORMAT DU NUMÉRO
       if (rawInput.includes('+') || /[^0-9]/.test(rawInput) || targetNumber.length < 8 || targetNumber.length > 15) {
         return await sendWithBotImage(kaya, from, sender, { 
             caption: `⚠️ *Invalid Number Format* ❌\n\n- Do **not** include the \`+\` sign.\n- Enter only your phone number digits (including country code).\n\n👉 *Correct example:* \`${prefix}pair 243999999999\``,
@@ -40,23 +53,24 @@ export default {
 
       const lockFile = path.join(PAIRING_FOLDER, `lock_${targetNumber}.json`);
 
-      // 1. GLOBAL COOLDOWN CHECK (30 seconds)
+      // 1. VÉRIFICATION DU COOLDOWN GLOBAL
       if (fs.existsSync(COOLDOWN_FILE)) {
-        const lastTime = JSON.parse(fs.readFileSync(COOLDOWN_FILE, 'utf-8')).timestamp;
-        if (Date.now() - lastTime < COOLDOWN_MS) {
-            const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - lastTime)) / 1000);
-            return await kaya.sendMessage(from, { text: `⚠️ *Server busy...*\n\nPlease wait *${remaining} seconds* before the next generation.` }, { quoted: mek });
-        }
+        try {
+          const lastTime = JSON.parse(fs.readFileSync(COOLDOWN_FILE, 'utf-8')).timestamp;
+          if (Date.now() - lastTime < COOLDOWN_MS) {
+              const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - lastTime)) / 1000);
+              return await kaya.sendMessage(from, { text: `⚠️ *Server busy...*\n\nPlease wait *${remaining} seconds* before the next generation.` }, { quoted: mek });
+          }
+        } catch (e) {}
       }
 
-      // 2. LOCK CHECK (If another bot is already processing this number)
+      // 2. VÉRIFICATION DU VERROU (LOCK)
       if (fs.existsSync(lockFile)) {
-        return await kaya.sendMessage(from, { text: '⚠️ *Info:* Another bot is already generating a code for this number. Please wait.' }, { quoted: mek });
+        return await kaya.sendMessage(from, { text: '⚠️ *Info:* Another process is already generating a code for this number. Please wait.' }, { quoted: mek });
       }
 
-      // 3. LOCK CREATION
-      fs.writeFileSync(lockFile, JSON.stringify({ bot: kaya.user.id, timestamp: Date.now() }));
-      // Update global cooldown
+      // 3. CRÉATION DU VERROU ET MISE À JOUR DU COOLDOWN
+      fs.writeFileSync(lockFile, JSON.stringify({ bot: kaya.user?.id || 'unknown', timestamp: Date.now() }));
       fs.writeFileSync(COOLDOWN_FILE, JSON.stringify({ timestamp: Date.now() }));
 
       const requestFile = path.join(PAIRING_FOLDER, `request_${targetNumber}.json`);
@@ -64,13 +78,17 @@ export default {
 
       if (fs.existsSync(codeFilePath)) fs.unlinkSync(codeFilePath);
 
-      // 4. Request creation
-      fs.writeFileSync(requestFile, JSON.stringify({ jid: targetNumber + "@s.whatsapp.net", name: getBotName(sender) }));
+      // 4. CRÉATION DE LA REQUÊTE POUR LE WATCHER (pair.js)
+      fs.writeFileSync(requestFile, JSON.stringify({ 
+        jid: targetNumber + "@s.whatsapp.net", 
+        name: getBotName(sender),
+        teleId: sender.replace(/[^0-9]/g, '')
+      }));
 
       await kaya.sendMessage(from, { text: '⏳ *Generating pairing code...*' }, { quoted: mek });
 
       let code = null;
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 15; i++) {
         await delay(1000); 
         if (fs.existsSync(codeFilePath)) {
           try {
@@ -84,7 +102,7 @@ export default {
         }
       }
 
-      // 5. CLEANUP
+      // 5. NETTOYAGE DES FICHIERS TEMPORAIRES
       if (fs.existsSync(requestFile)) fs.unlinkSync(requestFile);
       if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
 
@@ -96,11 +114,14 @@ export default {
 
     } catch (err) {
       console.error('❌ Pairing Error:', err);
-      // Cleanup on error
+      
+      // Nettoyage de secours en cas d'erreur
       const targetNumber = args[0]?.replace(/[^0-9]/g, '');
       if (targetNumber) {
         const lockFile = path.join(PAIRING_FOLDER, `lock_${targetNumber}.json`);
+        const requestFile = path.join(PAIRING_FOLDER, `request_${targetNumber}.json`);
         if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+        if (fs.existsSync(requestFile)) fs.unlinkSync(requestFile);
       }
       
       await kaya.sendMessage(from, { text: '❌ An error occurred during pairing.' }, { quoted: mek });
