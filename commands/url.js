@@ -1,90 +1,107 @@
-import { downloadContentFromMessage } from "@whiskeysockets/baileys";
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
-    name: "url",
-    aliases: ["tourl", "catbox", "imgurl"],
-    description: "Convertit une image répondue en lien URL public",
-    category: "Tools",
+    name: 'url',
+    alias: ['tourl', 'catbox', 'imgurl'],
+    description: 'Convert a replied image or video into a public URL',
+    category: 'Tools',
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            // Utilisation de mek.quoted pour une détection fiable
-            const quoted = mek.quoted ? mek.quoted : mek;
-            const mime = (quoted.msg || quoted).mimetype || '';
+            // Robust quoted message detection
+            const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage || mek.message;
+            const messageType = Object.keys(quoted)[0];
 
-            if (!/image/.test(mime)) {
+            let mediaMsg = null;
+            let mime = '';
+
+            if (messageType === 'imageMessage' || quoted.imageMessage) {
+                mediaMsg = quoted.imageMessage || mek.message.imageMessage;
+                mime = mediaMsg.mimetype || 'image/jpeg';
+            } else if (messageType === 'videoMessage' || quoted.videoMessage) {
+                mediaMsg = quoted.videoMessage || mek.message.videoMessage;
+                mime = mediaMsg.mimetype || 'video/mp4';
+            } else if (messageType === 'documentMessage' || quoted.documentMessage) {
+                mediaMsg = quoted.documentMessage || mek.message.documentMessage;
+                mime = mediaMsg.mimetype || 'application/octet-stream';
+            }
+
+            if (!mediaMsg || !/image|video|document/.test(mime)) {
                 return kaya.sendMessage(
                     from,
                     {
-                        text: `⚠️ *Usage :* Réponds à une image avec ${prefix}url`
+                        text: `⚠️ *Usage:* Reply to an image or video with \`${prefix}url\``
                     },
                     { quoted: mek }
                 );
             }
 
-            await kaya.sendPresenceUpdate("composing", from);
+            await kaya.sendPresenceUpdate('composing', from);
 
-            // Téléchargement sécurisé de l'image
-            let stream;
-            try {
-                stream = await downloadContentFromMessage(quoted, "image");
-            } catch (dlError) {
-                console.error('❌ Erreur téléchargement image :', dlError);
-                return kaya.sendMessage(from, { text: "❌ Impossible de télécharger cette image." }, { quoted: mek });
-            }
-
+            // Secure media download
+            const typeDownload = mime.includes('video') ? 'video' : (mime.includes('document') ? 'document' : 'image');
+            const stream = await downloadContentFromMessage(mediaMsg, typeDownload);
             const chunks = [];
+
             for await (const chunk of stream) {
                 chunks.push(chunk);
             }
+
             const buffer = Buffer.concat(chunks);
 
             if (!buffer || buffer.length === 0) {
                 return kaya.sendMessage(
                     from,
                     {
-                        text: "❌ L'image est vide ou corrompue."
+                        text: '❌ The media file is empty or corrupted.'
                     },
                     { quoted: mek }
                 );
             }
 
-            // Utilisation de fetch natif avec FormData et Blob (évite les ECONNRESET de form-data)
-            const formData = new FormData();
-            formData.append("reqtype", "fileupload");
-            const blob = new Blob([buffer], { type: mime || "image/jpeg" });
-            formData.append("fileToUpload", blob, "image.jpg");
+            // Determine correct file extension
+            let ext = 'jpg';
+            if (mime.includes('png')) ext = 'png';
+            else if (mime.includes('webp')) ext = 'webp';
+            else if (mime.includes('mp4')) ext = 'mp4';
+            else if (mime.includes('gif')) ext = 'gif';
 
-            const response = await fetch("https://catbox.moe/user/api.php", {
-                method: "POST",
+            // Native fetch with FormData and Blob for Catbox upload
+            const formData = new FormData();
+            formData.append('reqtype', 'fileupload');
+            const blob = new Blob([buffer], { type: mime });
+            formData.append('fileToUpload', blob, `media_${Date.now()}.${ext}`);
+
+            const response = await fetch('https://catbox.moe/user/api.php', {
+                method: 'POST',
                 body: formData
             });
 
             if (!response.ok) {
-                throw new Error(`Erreur serveur Catbox (Statut ${response.status})`);
+                throw new Error(`Catbox server error (Status ${response.status})`);
             }
 
             const url = (await response.text()).trim();
 
-            if (!url.startsWith("http")) {
-                throw new Error(url || "Réponse invalide de Catbox");
+            if (!url.startsWith('http')) {
+                throw new Error(url || 'Invalid response from Catbox');
             }
 
             await kaya.sendMessage(
                 from,
                 {
-                    text: `✅ *Image uploadée avec succès !*\n\n🔗 ${url}`
+                    text: `✅ *Media uploaded successfully!*\n\n🔗 ${url}`
                 },
                 { quoted: mek }
             );
 
         } catch (err) {
-            console.error('❌ Erreur critique dans la commande url :', err);
+            console.error('❌ Critical error in url command:', err);
 
             await kaya.sendMessage(
                 from,
                 {
-                    text: `❌ Une erreur est survenue : ${err.message}`
+                    text: `❌ An error occurred: ${err.message}`
                 },
                 { quoted: mek }
             );

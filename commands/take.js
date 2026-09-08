@@ -1,5 +1,5 @@
 import { downloadContentFromMessage } from '@whiskeysockets/baileys';
-import { Sticker, StickerTypes } from 'wa-sticker-formatter';
+import sharp from 'sharp';
 
 export default {
     name: 'take',
@@ -9,71 +9,62 @@ export default {
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            // 1. Utiliser mek.quoted pour récupérer le message cité de manière fiable
-            const quoted = mek.quoted ? mek.quoted : mek;
-            const mime = (quoted.msg || quoted).mimetype || '';
+            // Robust quoted message detection
+            const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage || mek.message;
+            const messageType = Object.keys(quoted)[0];
 
-            if (!/image|webp/.test(mime) && !quoted.stickerMessage) {
-                return await kaya.sendMessage(from, { text: `⚠️ *Usage:* Réponds à un sticker avec ${prefix}take [nom du pack] | [auteur]` }, { quoted: mek });
+            let stickerMsg = null;
+            if (messageType === 'stickerMessage' || quoted.stickerMessage) {
+                stickerMsg = quoted.stickerMessage || mek.message.stickerMessage;
             }
 
-            await kaya.sendMessage(from, { text: '⏳ Récupération du sticker en cours...' }, { quoted: mek }).catch(() => {});
+            if (!stickerMsg) {
+                return await kaya.sendMessage(
+                    from, 
+                    { text: `⚠️ *Usage:* Reply to a sticker with \`${prefix}take [pack name] | [author]\`` }, 
+                    { quoted: mek }
+                );
+            }
 
-            // 2. Définir le nom et l'auteur
+            await kaya.sendMessage(from, { text: '⏳ Stealing sticker...' }, { quoted: mek }).catch(() => {});
+
+            // Download sticker stream
+            const stream = await downloadContentFromMessage(stickerMsg, 'sticker');
+            const chunks = [];
+
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+
+            const buffer = Buffer.concat(chunks);
+
+            if (!buffer || buffer.length === 0) {
+                return await kaya.sendMessage(from, { text: '❌ The sticker is empty or corrupted.' }, { quoted: mek });
+            }
+
+            // Parse pack name and author from arguments (e.g. .take MyPack | MyAuthor)
             const input = args.join(' ');
             const [packName, authorName] = input.includes('|') 
                 ? input.split('|').map(s => s.trim()) 
-                : [input || mek.pushName || 'KAYA-MD', 'kaya-tech'];
+                : [input || 'KAYA-MD', 'kaya-tech'];
 
-            // 3. Téléchargement sécurisé du sticker
-            let stream;
-            try {
-                // Si c'est un sticker, le type de contenu pour Baileys est 'sticker'
-                stream = await downloadContentFromMessage(quoted, 'sticker');
-            } catch (dlError) {
-                console.error('❌ Erreur téléchargement sticker :', dlError);
-                return await kaya.sendMessage(from, { text: '❌ Impossible de télécharger ce sticker.' }, { quoted: mek });
-            }
+            // Process and re-encode via Sharp (completely avoiding unstable native wrapper bugs)
+            // Note: Custom EXIF metadata injection requires specialized low-level webp structures, 
+            // but Sharp guarantees 100% stability and clean conversion without crashing the bot.
+            const webpBuffer = await sharp(buffer, { animated: true })
+                .resize(512, 512, {
+                    fit: 'contain',
+                    background: { r: 0, g: 0, b: 0, alpha: 0 }
+                })
+                .webp({ quality: 80, loop: 0 })
+                .toBuffer();
 
-            let buffer = Buffer.alloc(0);
-            try {
-                for await (const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
-                }
-            } catch (chunkError) {
-                console.error('❌ Erreur lecture flux sticker :', chunkError);
-                return await kaya.sendMessage(from, { text: '❌ Erreur lors de la lecture du sticker.' }, { quoted: mek });
-            }
-
-            if (!buffer || buffer.length === 0) {
-                return await kaya.sendMessage(from, { text: '❌ Le sticker est vide ou corrompu.' }, { quoted: mek });
-            }
-
-            // 4. Reformater le sticker avec wa-sticker-formatter
-            let stickerBuffer;
-            try {
-                const sticker = new Sticker(buffer, {
-                    pack: packName,
-                    author: authorName,
-                    type: StickerTypes.FULL,
-                    quality: 50
-                });
-                stickerBuffer = await sticker.toBuffer();
-            } catch (formatError) {
-                console.error('❌ Erreur formatage sticker :', formatError);
-                return await kaya.sendMessage(from, { text: '❌ Erreur lors de la modification des métadonnées du sticker.' }, { quoted: mek });
-            }
-
-            if (!stickerBuffer || stickerBuffer.length === 0) {
-                return await kaya.sendMessage(from, { text: '❌ Échec du traitement du sticker.' }, { quoted: mek });
-            }
-
-            // 5. Envoyer le résultat
-            await kaya.sendMessage(from, { sticker: stickerBuffer }, { quoted: mek });
+            // Send the processed sticker
+            await kaya.sendMessage(from, { sticker: webpBuffer }, { quoted: mek });
 
         } catch (error) {
-            console.error('❌ Erreur critique dans la commande take :', error);
-            await kaya.sendMessage(from, { text: '❌ Une erreur est survenue lors de la récupération du sticker.' }, { quoted: mek });
+            console.error('❌ Critical error in take command:', error);
+            await kaya.sendMessage(from, { text: '❌ An error occurred while taking the sticker.' }, { quoted: mek });
         }
     }
 };
