@@ -24,7 +24,7 @@ function getDayName() {
 // 🎨 Style avec conservation du préfixe `>` et alignement parfait des encadrés
 function buildHeader({ user, prefix, totalCmds, botName }) {
     return `
-> ╭┈*▉ \`${botName}\` ▉*┄◈
+  ╭┈▉ \`${botName}\` ▉┄◈
 > ┆ ╭────↯
 > ┆ │ ➠ *𝙾𝚆𝙽𝙴𝚁:* ${user}
 > ┆ │ ➠ *𝙿𝚁𝙴𝙵𝙸𝚇:* ${prefix || 'Sans préfixe'}
@@ -33,7 +33,7 @@ function buildHeader({ user, prefix, totalCmds, botName }) {
 > ┆ │ ➠ *𝚃𝙸𝙼𝙴:* ${getTime()}
 > ┆ │ ➠ *𝚃𝙾𝚃𝙰𝙻 𝙲𝙼𝙳𝚂:* ${totalCmds}
 > ┆ ╰────↯
-> ╰┄┄┄┄┄┄┄┄┄┄┄┄┄◈
+  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄◈
 `.trim();
 }
 
@@ -41,10 +41,10 @@ function buildMenuCategoryText({ cat, cmds = [], prefix }) {
     if (!cmds.length) return '';
 
     return `
-> ╢ ${cat.toUpperCase()}
-  ╭▰▰▰▰▰▰▰◈
-${cmds.map(c => `> ┆ │ ➠ ${prefix}${c.toLowerCase()}`).join('\n')}
-  ╰▰▰▰▰▰▰▰◈
+> ╢ ${cat.toUpperCase()} ♰
+╭▰▰▰▰▰▰▰◈
+${cmds.map(c => `┆ ➠ ${prefix}${c.toLowerCase()}`).join('\n')}
+╰▰▰▰▰▰▰▰◈
 `.trim();
 }
 
