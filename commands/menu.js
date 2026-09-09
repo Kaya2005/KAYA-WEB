@@ -21,10 +21,10 @@ function getDayName() {
     return days[new Date().getDay()];
 }
 
-// 🎨 Style fusionné inspiré de tes exemples (encadrés élégants avec coins et symboles ᖫ / 𖤍)
+// 🎨 Style avec conservation du préfixe `>` et alignement parfait des encadrés
 function buildHeader({ user, prefix, totalCmds, botName }) {
     return `
-> ╭┈『◈ *▉ \`${botName}\` ▉* ◈』
+> ╭┈*▉ \`${botName}\` ▉*┄◈
 > ┆ ╭────↯
 > ┆ │ ➠ *𝙾𝚆𝙽𝙴𝚁:* ${user}
 > ┆ │ ➠ *𝙿𝚁𝙴𝙵𝙸𝚇:* ${prefix || 'Sans préfixe'}
@@ -41,11 +41,10 @@ function buildMenuCategoryText({ cat, cmds = [], prefix }) {
     if (!cmds.length) return '';
 
     return `
- ╭┈『◈ *${cat.toUpperCase()}* ◈』
- ┆ ╭▰▰▰▰▰▰▰◈
+> ╢ ${cat.toUpperCase()}
+  ╭▰▰▰▰▰▰▰◈
 ${cmds.map(c => `> ┆ │ ➠ ${prefix}${c.toLowerCase()}`).join('\n')}
- ┆ ╰▰▰▰▰▰▰▰◈
- ╰┄┄┄┄┄┄┄┄┄┄┄┄┄
+  ╰▰▰▰▰▰▰▰◈
 `.trim();
 }
 
