@@ -24,7 +24,7 @@ function getDayName() {
 // 🎨 Style fusionné inspiré de tes exemples (encadrés élégants avec coins et symboles ᖫ / 𖤍)
 function buildHeader({ user, prefix, totalCmds, botName }) {
     return `
-> ╭┈『ᖫ *${botName.toUpperCase()}* ᖭ』
+> ╭┈『◈ *▉ \`${botName}\` ▉* ◈』
 > ┆ ╭────↯
 > ┆ │ ➠ *𝙾𝚆𝙽𝙴𝚁:* ${user}
 > ┆ │ ➠ *𝙿𝚁𝙴𝙵𝙸𝚇:* ${prefix || 'Sans préfixe'}
@@ -33,7 +33,7 @@ function buildHeader({ user, prefix, totalCmds, botName }) {
 > ┆ │ ➠ *𝚃𝙸𝙼𝙴:* ${getTime()}
 > ┆ │ ➠ *𝚃𝙾𝚃𝙰𝙻 𝙲𝙼𝙳𝚂:* ${totalCmds}
 > ┆ ╰────↯
-> ╰┄┄┄┄┄┄┄┄┄┄┄┄┄〩
+> ╰┄┄┄┄┄┄┄┄┄┄┄┄┄◈
 `.trim();
 }
 
@@ -41,11 +41,11 @@ function buildMenuCategoryText({ cat, cmds = [], prefix }) {
     if (!cmds.length) return '';
 
     return `
-> ╭┈『ᖫ *${cat.toUpperCase()}* ᖭ』
-> ┆╭▰▰▰▰▰▰▰◈
-${cmds.map(c => `> ┆ │ 𖤍 ${prefix}${c.toLowerCase()}`).join('\n')}
-> ┆ ╰▰▰▰▰▰▰▰◈
-> ╰┄┄┄┄┄┄┄┄┄┄┄┄┄〩
+ ╭┈『◈ *${cat.toUpperCase()}* ◈』
+ ┆ ╭▰▰▰▰▰▰▰◈
+${cmds.map(c => `> ┆ │ ➠ ${prefix}${c.toLowerCase()}`).join('\n')}
+ ┆ ╰▰▰▰▰▰▰▰◈
+ ╰┄┄┄┄┄┄┄┄┄┄┄┄┄
 `.trim();
 }
 
