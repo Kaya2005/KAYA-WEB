@@ -19,259 +19,101 @@ const PAIRING_DIR =
         "pairing"
     );
 
+// ⚠️ Dossier temporaire isolé pour éviter de scanner la racine des sessions
+const TEMP_FILES_DIR =
+    path.join(
+        DATA_DIR,
+        "richstore",
+        "temp"
+    );
+
+if (!fs.existsSync(TEMP_FILES_DIR)) {
+    fs.mkdirSync(TEMP_FILES_DIR, { recursive: true });
+}
+
 // ==========================================
 // 🧹 AUTO CLEANUP
 // ==========================================
 
 export function startAutoCleanup() {
 
-    // ==========================================
-    // 📁 DOSSIER TEMPORAIRE
-    // ==========================================
-    // On garde les fichiers temporaires dans
-    // DATA_DIR afin qu'ils soient centralisés.
-    // ==========================================
-
-    const TEMP_DIR =
-        DATA_DIR;
-
     const clean = () => {
 
         try {
 
-            const now =
-                Date.now();
-
-            let deletedCount =
-                0;
+            const now = Date.now();
+            let deletedCount = 0;
 
             // ==========================================
-            // 1. NETTOYAGE FICHIERS TEMPORAIRES
+            // 1. NETTOYAGE FICHIERS TEMPORAIRES (Dossier isolé)
             // ==========================================
 
-            if (
-                fs.existsSync(
-                    TEMP_DIR
-                )
-            ) {
+            if (fs.existsSync(TEMP_FILES_DIR)) {
 
-                const files =
-                    fs.readdirSync(
-                        TEMP_DIR
-                    );
+                const files = fs.readdirSync(TEMP_FILES_DIR);
 
-                files.forEach(
-                    file => {
+                files.forEach(file => {
 
-                        // Fichiers temporaires
-                        if (
-                            file.startsWith(
-                                "tmp_"
-                            ) ||
-                            (
-                                file.startsWith(
-                                    "out_"
-                                ) &&
-                                file.endsWith(
-                                    ".webp"
-                                )
-                            )
-                        ) {
+                    const filePath = path.join(TEMP_FILES_DIR, file);
 
-                            const filePath =
-                                path.join(
-                                    TEMP_DIR,
-                                    file
-                                );
+                    try {
+                        const stats = fs.statSync(filePath);
+                        const fileAgeMinutes = (now - stats.mtimeMs) / (1000 * 60);
 
-                            try {
-
-                                const stats =
-                                    fs.statSync(
-                                        filePath
-                                    );
-
-                                const fileAgeMinutes =
-                                    (
-                                        now -
-                                        stats.mtimeMs
-                                    ) /
-                                    (
-                                        1000 *
-                                        60
-                                    );
-
-                                // Plus de 15 minutes
-                                if (
-                                    fileAgeMinutes >
-                                    15
-                                ) {
-
-                                    fs.unlinkSync(
-                                        filePath
-                                    );
-
-                                    deletedCount++;
-                                }
-
-                            } catch {
-                                // Fichier utilisé ou disparu
-                            }
+                        // Supprime si plus de 15 minutes et que c'est un fichier
+                        if (fileAgeMinutes > 15 && stats.isFile()) {
+                            fs.unlinkSync(filePath);
+                            deletedCount++;
                         }
+                    } catch {
+                        // Fichier utilisé ou disparu
                     }
-                );
+                });
             }
 
             // ==========================================
-            // 2. NETTOYAGE REQUEST / PAIRING
+            // 2. NETTOYAGE REQUEST / PAIRING (Fichiers orphelins uniquement)
             // ==========================================
 
-            if (
-                fs.existsSync(
-                    PAIRING_DIR
-                )
-            ) {
+            if (fs.existsSync(PAIRING_DIR)) {
 
-                const pairingFiles =
-                    fs.readdirSync(
-                        PAIRING_DIR
-                    );
+                const pairingFiles = fs.readdirSync(PAIRING_DIR);
 
-                pairingFiles.forEach(
-                    file => {
+                pairingFiles.forEach(file => {
 
-                        if (
-                            file.startsWith(
-                                "request_"
-                            ) ||
-                            file.startsWith(
-                                "pairing_"
-                            )
-                        ) {
+                    // On cible uniquement les fichiers de requêtes de pairage globaux
+                    if (
+                        file.startsWith("request_") ||
+                        (file.startsWith("pairing_") && file.endsWith(".json"))
+                    ) {
 
-                            const filePath =
-                                path.join(
-                                    PAIRING_DIR,
-                                    file
-                                );
+                        const filePath = path.join(PAIRING_DIR, file);
 
-                            try {
+                        try {
+                            const stats = fs.statSync(filePath);
+                            const fileAgeHours = (now - stats.mtimeMs) / (1000 * 60 * 60);
 
-                                const stats =
-                                    fs.statSync(
-                                        filePath
-                                    );
-
-                                const fileAgeHours =
-                                    (
-                                        now -
-                                        stats.mtimeMs
-                                    ) /
-                                    (
-                                        1000 *
-                                        60 *
-                                        60
-                                    );
-
-                                // Supprime les demandes
-                                // bloquées depuis plus de 2 heures
-                                if (
-                                    fileAgeHours >
-                                    2
-                                ) {
-
-                                    fs.unlinkSync(
-                                        filePath
-                                    );
-
-                                    deletedCount++;
-                                }
-
-                            } catch {
-                                // Ignore
+                            // Supprime les demandes bloquées depuis plus de 2 heures
+                            if (fileAgeHours > 2 && stats.isFile()) {
+                                fs.unlinkSync(filePath);
+                                deletedCount++;
                             }
+                        } catch {
+                            // Ignore
                         }
                     }
-                );
-
-                // ==========================================
-                // 3. SESSIONS WHATSAPP
-                // ==========================================
-                //
-                // ⚠️ IMPORTANT :
-                //
-                // NE PAS supprimer les fichiers
-                // présents dans les dossiers de session.
-                //
-                // Baileys utilise plusieurs fichiers :
-                //
-                // creds.json
-                // app-state-sync-key-*
-                // pre-key-*
-                // sender-key-*
-                // session-*
-                // etc.
-                //
-                // Les supprimer peut casser la session.
-                // ==========================================
-
-                const entries =
-                    fs.readdirSync(
-                        PAIRING_DIR,
-                        {
-                            withFileTypes: true
-                        }
-                    );
-
-                entries.forEach(
-                    entry => {
-
-                        if (
-                            !entry.isDirectory()
-                        ) {
-                            return;
-                        }
-
-                        // On ne touche absolument pas
-                        // au contenu des sessions.
-                    }
-                );
+                });
             }
 
-            // ==========================================
-            // LOG
-            // ==========================================
-
-            if (
-                deletedCount > 0
-            ) {
-
-                console.log(
-                    `🧹 [CLEANUP] ${deletedCount} fichiers temporaires ou fichiers de pairing purgés.`
-                );
+            if (deletedCount > 0) {
+                console.log(`🧹 [CLEANUP] ${deletedCount} fichiers temporaires purgés.`);
             }
 
         } catch (err) {
-
-            console.error(
-                '❌ Erreur lors du nettoyage automatique :',
-                err
-            );
+            console.error('❌ Erreur lors du nettoyage automatique :', err);
         }
     };
 
-    // ==========================================
-    // NETTOYAGE AU DÉMARRAGE
-    // ==========================================
-
     clean();
-
-    // ==========================================
-    // NETTOYAGE TOUTES LES 30 MINUTES
-    // ==========================================
-
-    setInterval(
-        clean,
-        30 * 60 * 1000
-    );
+    setInterval(clean, 30 * 60 * 1000);
 }

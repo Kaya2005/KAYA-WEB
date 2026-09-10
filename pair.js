@@ -15,9 +15,8 @@ import path from "path";
 import pino from "pino";
 import { fileURLToPath } from "url";
 
-import handler, {
-    commands
-} from "./case.js";
+// On importe uniquement le handler principal (caseHandler)
+import handler from "./case.js";
 
 import {
     connectionMessage,
@@ -1086,6 +1085,7 @@ export default async function startpairing(
             return jid;
         };
 
+    // 🛡️ CORRECTION ICI : On utilise uniquement le caseHandler (handler) de manière propre et unique
     kaya.ev.on(
         "messages.upsert",
         async chatUpdate => {
@@ -1114,29 +1114,7 @@ export default async function startpairing(
                         rawMsg
                     );
 
-                const uniqueCommands =
-                    new Set(
-                        commands.values()
-                    );
-
-                for (
-                    const cmd
-                    of uniqueCommands
-                ) {
-
-                    if (
-                        typeof cmd.detect ===
-                        "function"
-                    ) {
-
-                        await cmd.detect(
-                            kaya,
-                            mek,
-                            mek.chat
-                        );
-                    }
-                }
-
+                // Appel unique au routeur principal (case.js) qui gère déjà tout (commandes + utilitaires)
                 await handler(
                     kaya,
                     mek,
@@ -1623,7 +1601,8 @@ function smsg(
                 ?.quotedMessage ||
             null;
 
-        if (quoted) {
+        if,
+        (quoted) {
 
             const type =
                 getContentType(

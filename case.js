@@ -21,6 +21,8 @@ const commandsPath = path.join(__dirname, "commands");
 
 const presenceTracker = new Map();
 const cooldownTracker = new Map();
+// 🛡️ ANTI-DUPLICATE MESSAGE TRACKER (Évite le double traitement en quelques millisecondes)
+const recentProcessedMessages = new Set();
 
 // ==================== CHARGEMENT DES COMMANDES ====================
 
@@ -92,6 +94,15 @@ export default async function caseHandler(
         ) {
             return;
         }
+
+        // 🛡️ Anti-duplication stricte (si le même ID de message arrive deux fois en moins de 3s)
+        if (recentProcessedMessages.has(mek.key.id)) {
+            return;
+        }
+        recentProcessedMessages.add(mek.key.id);
+        setTimeout(() => {
+            recentProcessedMessages.delete(mek.key.id);
+        }, 3000);
 
         const sender = mek.sender;
         const from = mek.key.remoteJid;
