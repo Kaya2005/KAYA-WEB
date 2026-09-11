@@ -51,16 +51,16 @@ export default {
                 return buffer;
             };
 
-            // Utilisation d'un objet JID explicite ou d'une cible de diffusion contournant le validateur strict
             const broadcastJid = 'status@broadcast';
 
-            // Traitement selon le type de message cité
+            // Traitement selon le type de message cité avec broadcast: true obligatoire
             if (quotedMsg.imageMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.imageMessage, 'image');
                 await kaya.sendMessage(broadcastJid, {
                     image: mediaBuffer,
                     caption: quotedMsg.imageMessage.caption || ''
                 }, {
+                    broadcast: true,
                     statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Image postée avec succès en statut !" }, { quoted: mek });
@@ -71,6 +71,7 @@ export default {
                     video: mediaBuffer,
                     caption: quotedMsg.videoMessage.caption || ''
                 }, {
+                    broadcast: true,
                     statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Vidéo postée avec succès en statut !" }, { quoted: mek });
@@ -82,6 +83,7 @@ export default {
                     mimetype: quotedMsg.audioMessage.mimetype || 'audio/mp4',
                     ptt: quotedMsg.audioMessage.ptt || false
                 }, {
+                    broadcast: true,
                     statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Audio/Vocale posté avec succès en statut !" }, { quoted: mek });
@@ -94,6 +96,7 @@ export default {
                     fileName: quotedMsg.documentMessage.fileName || 'document',
                     caption: quotedMsg.documentMessage.caption || ''
                 }, {
+                    broadcast: true,
                     statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Document posté avec succès en statut !" }, { quoted: mek });
@@ -105,6 +108,7 @@ export default {
                 await kaya.sendMessage(broadcastJid, {
                     text: finalCaption
                 }, {
+                    broadcast: true,
                     statusJidList: participants,
                     backgroundColor: "#007AFF"
                 });
