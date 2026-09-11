@@ -1,3 +1,7 @@
+// ==========================================
+// PAIRING FILE - pair.js
+// ==========================================
+
 import {
     default as makeWASocket,
     jidDecode,
@@ -1163,27 +1167,9 @@ export default async function startpairing(
 
             try {
 
-                const uniqueCommands =
-                    new Set(
-                        commands.values()
-                    );
-
-                for (
-                    const cmd
-                    of uniqueCommands
-                ) {
-
-                    if (
-                        typeof cmd.participantUpdate ===
-                        "function"
-                    ) {
-
-                        await cmd.participantUpdate(
-                            kaya,
-                            update
-                        );
-                    }
-
+                // CORRECTION : Utilisation directe de handler ou vérification sécurisée si `commands` n'est pas importé ici
+                if (typeof handler.participantUpdate === "function") {
+                    await handler.participantUpdate(kaya, update);
                 }
 
             } catch (err) {
