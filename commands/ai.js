@@ -85,7 +85,7 @@ export default {
                 }, { quoted: mek });
             }
 
-            // Use Groq API (Updated Model)
+            // Use Groq API (Llama 3.3 70B Versatile)
             const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: { 
@@ -93,7 +93,7 @@ export default {
                     'Authorization': `Bearer ${ownerApiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'llama-3.1-8b-instant',
+                    model: 'llama-3.3-70b-versatile',
                     messages: [
                         { role: 'user', content: text }
                     ]
