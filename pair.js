@@ -1,5 +1,3 @@
-// ==================== pair.js ====================
-
 import {
     default as makeWASocket,
     jidDecode,
@@ -1564,12 +1562,13 @@ function smsg(
                 "@g.us"
             );
 
+        // CORRECTION : Extraction correcte du sender dans les groupes (m.key.participant en premier)
         m.sender =
             kaya.decodeJid(
                 m.fromMe
                     ? kaya.user.id
-                    : m.participant ||
-                      m.key.participant ||
+                    : m.key.participant ||
+                      m.participant ||
                       m.chat ||
                       ""
             );

@@ -1,4 +1,3 @@
-// ==================== case.js ====================
 import { getContentType } from "@whiskeysockets/baileys";
 import fs from "fs";
 import path from "path";
@@ -114,7 +113,7 @@ export default async function caseHandler(
 
         const ownerId =
             kaya.user?.id
-                ? kaya.user.id.split(":")[0]
+                ? decodeJid(kaya.user.id).split("@")[0].split(":")[0]
                 : "";
 
         const groupId =
