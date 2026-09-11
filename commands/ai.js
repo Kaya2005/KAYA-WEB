@@ -85,17 +85,17 @@ export default {
                 }, { quoted: mek });
             }
 
-            // Use OpenRouter API
+            // Use OpenRouter API with automatic free routing
             const apiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${ownerApiKey}`,
-                    'HTTP-Referer': 'https://github.com/kaya-bot', // Optionnel requis par OpenRouter pour le suivi
-                    'X-Title': 'KAYA BOT' // Optionnel
+                    'HTTP-Referer': 'https://github.com/kaya-bot',
+                    'X-Title': 'KAYA BOT'
                 },
                 body: JSON.stringify({
-                    model: 'google/gemini-2.0-flash-lite-preview-02-05:free', // Modèle gratuit ultra performant
+                    model: 'openrouter/free', // Route automatiquement vers le meilleur modèle gratuit disponible
                     messages: [
                         { role: 'user', content: text }
                     ]
