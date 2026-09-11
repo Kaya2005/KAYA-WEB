@@ -1,5 +1,5 @@
 // ==================== commands/setstatus.js ====================
-import { downloadContentFromMessage, STORIES_JID } from '@whiskeysockets/baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
     name: 'setstatus',
@@ -25,7 +25,7 @@ export default {
 
             const quotedMsg = mek.message.extendedTextMessage.contextInfo.quotedMessage;
             
-            // Récupération des participants valides (uniquement en @s.whatsapp.net pour éviter les erreurs de JID)
+            // Récupération des participants pour diffuser le statut
             let participants = [];
             const isGroup = from.endsWith('@g.us');
             if (isGroup) {
@@ -37,7 +37,6 @@ export default {
                 }
             }
             
-            // Si on est en privé ou si la liste est vide, on inclut au moins l'owner pour que le statut passe
             if (participants.length === 0) {
                 participants = [ownerId + '@s.whatsapp.net'];
             }
@@ -52,54 +51,50 @@ export default {
                 return buffer;
             };
 
-            // Utilisation de STORIES_JID ('status@broadcast' normalisé par Baileys)
-            const targetJid = typeof STORIES_JID === 'string' ? STORIES_JID : 'status@broadcast';
+            // Utilisation d'un objet JID explicite ou d'une cible de diffusion contournant le validateur strict
+            const broadcastJid = 'status@broadcast';
 
             // Traitement selon le type de message cité
             if (quotedMsg.imageMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.imageMessage, 'image');
-                await kaya.sendMessage(targetJid, {
+                await kaya.sendMessage(broadcastJid, {
                     image: mediaBuffer,
                     caption: quotedMsg.imageMessage.caption || ''
                 }, {
-                    statusJidList: participants,
-                    broadcast: true
+                    statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Image postée avec succès en statut !" }, { quoted: mek });
                 
             } else if (quotedMsg.videoMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.videoMessage, 'video');
-                await kaya.sendMessage(targetJid, {
+                await kaya.sendMessage(broadcastJid, {
                     video: mediaBuffer,
                     caption: quotedMsg.videoMessage.caption || ''
                 }, {
-                    statusJidList: participants,
-                    broadcast: true
+                    statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Vidéo postée avec succès en statut !" }, { quoted: mek });
                 
             } else if (quotedMsg.audioMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.audioMessage, 'audio');
-                await kaya.sendMessage(targetJid, {
+                await kaya.sendMessage(broadcastJid, {
                     audio: mediaBuffer,
                     mimetype: quotedMsg.audioMessage.mimetype || 'audio/mp4',
                     ptt: quotedMsg.audioMessage.ptt || false
                 }, {
-                    statusJidList: participants,
-                    broadcast: true
+                    statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Audio/Vocale posté avec succès en statut !" }, { quoted: mek });
                 
             } else if (quotedMsg.documentMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.documentMessage, 'document');
-                await kaya.sendMessage(targetJid, {
+                await kaya.sendMessage(broadcastJid, {
                     document: mediaBuffer,
                     mimetype: quotedMsg.documentMessage.mimetype,
                     fileName: quotedMsg.documentMessage.fileName || 'document',
                     caption: quotedMsg.documentMessage.caption || ''
                 }, {
-                    statusJidList: participants,
-                    broadcast: true
+                    statusJidList: participants
                 });
                 await kaya.sendMessage(from, { text: "✅ Document posté avec succès en statut !" }, { quoted: mek });
                 
@@ -107,11 +102,10 @@ export default {
                 const textContent = quotedMsg.conversation || quotedMsg.extendedTextMessage.text;
                 const finalCaption = args.length > 0 ? args.join(' ') : textContent;
                 
-                await kaya.sendMessage(targetJid, {
+                await kaya.sendMessage(broadcastJid, {
                     text: finalCaption
                 }, {
                     statusJidList: participants,
-                    broadcast: true,
                     backgroundColor: "#007AFF"
                 });
                 await kaya.sendMessage(from, { text: "✅ Texte posté avec succès en statut !" }, { quoted: mek });
