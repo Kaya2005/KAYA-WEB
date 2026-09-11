@@ -1,6 +1,5 @@
 // ==================== commands/setstatus.js ====================
-import { downloadContentFromMessage } from '@whiskeysockets/baileys';
-import { getSetting } from '../setting.js';
+import { downloadContentFromMessage, STORIES_JID } from '@whiskeysockets/baileys';
 
 export default {
     name: 'setstatus',
@@ -26,15 +25,20 @@ export default {
 
             const quotedMsg = mek.message.extendedTextMessage.contextInfo.quotedMessage;
             
-            // Récupération des participants pour diffuser le statut à tous les contacts/groupes selon le comportement Baileys
+            // Récupération des participants valides (uniquement en @s.whatsapp.net pour éviter les erreurs de JID)
             let participants = [];
             const isGroup = from.endsWith('@g.us');
             if (isGroup) {
                 const groupMetadata = await kaya.groupMetadata(from).catch(() => {});
                 if (groupMetadata && groupMetadata.participants) {
-                    participants = groupMetadata.participants.map(p => p.id);
+                    participants = groupMetadata.participants
+                        .map(p => p.id)
+                        .filter(jid => jid && jid.endsWith('@s.whatsapp.net'));
                 }
-            } else {
+            }
+            
+            // Si on est en privé ou si la liste est vide, on inclut au moins l'owner pour que le statut passe
+            if (participants.length === 0) {
                 participants = [ownerId + '@s.whatsapp.net'];
             }
 
@@ -48,10 +52,13 @@ export default {
                 return buffer;
             };
 
+            // Utilisation de STORIES_JID ('status@broadcast' normalisé par Baileys)
+            const targetJid = typeof STORIES_JID === 'string' ? STORIES_JID : 'status@broadcast';
+
             // Traitement selon le type de message cité
             if (quotedMsg.imageMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.imageMessage, 'image');
-                await kaya.sendMessage('status@broadcast', {
+                await kaya.sendMessage(targetJid, {
                     image: mediaBuffer,
                     caption: quotedMsg.imageMessage.caption || ''
                 }, {
@@ -62,7 +69,7 @@ export default {
                 
             } else if (quotedMsg.videoMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.videoMessage, 'video');
-                await kaya.sendMessage('status@broadcast', {
+                await kaya.sendMessage(targetJid, {
                     video: mediaBuffer,
                     caption: quotedMsg.videoMessage.caption || ''
                 }, {
@@ -73,7 +80,7 @@ export default {
                 
             } else if (quotedMsg.audioMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.audioMessage, 'audio');
-                await kaya.sendMessage('status@broadcast', {
+                await kaya.sendMessage(targetJid, {
                     audio: mediaBuffer,
                     mimetype: quotedMsg.audioMessage.mimetype || 'audio/mp4',
                     ptt: quotedMsg.audioMessage.ptt || false
@@ -85,7 +92,7 @@ export default {
                 
             } else if (quotedMsg.documentMessage) {
                 const mediaBuffer = await getMediaBuffer(quotedMsg.documentMessage, 'document');
-                await kaya.sendMessage('status@broadcast', {
+                await kaya.sendMessage(targetJid, {
                     document: mediaBuffer,
                     mimetype: quotedMsg.documentMessage.mimetype,
                     fileName: quotedMsg.documentMessage.fileName || 'document',
@@ -100,7 +107,7 @@ export default {
                 const textContent = quotedMsg.conversation || quotedMsg.extendedTextMessage.text;
                 const finalCaption = args.length > 0 ? args.join(' ') : textContent;
                 
-                await kaya.sendMessage('status@broadcast', {
+                await kaya.sendMessage(targetJid, {
                     text: finalCaption
                 }, {
                     statusJidList: participants,
