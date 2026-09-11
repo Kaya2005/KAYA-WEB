@@ -1,3 +1,4 @@
+// ==================== commands/ai.js ====================
 import fetch from 'node-fetch';
 import { getSetting, setSetting } from '../setting.js';
 
@@ -84,7 +85,7 @@ export default {
                 }, { quoted: mek });
             }
 
-            // Use Groq API (Llama 3.3 Model)
+            // Use Groq API (Updated Model)
             const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: { 
@@ -92,7 +93,7 @@ export default {
                     'Authorization': `Bearer ${ownerApiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'llama-3.3-70b-versatile',
+                    model: 'llama-3.1-8b-instant',
                     messages: [
                         { role: 'user', content: text }
                     ]
