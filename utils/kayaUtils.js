@@ -84,8 +84,10 @@ function getSpeedRange(kaya) {
 }
 
 // ==========================================
-// ENVOI
+// FILE D'ATTENTE SÉQUENTIELLE PAR SESSION (ANTI-BAN)
 // ==========================================
+
+const sessionQueues = new Map();
 
 export async function sendLimited(
     kaya,
@@ -106,40 +108,46 @@ export async function sendLimited(
     }
 
     const number =
-        getCleanNumber(jid);
+        getCleanNumber(kaya.user?.id);
 
     if (!number) {
 
         throw new Error(
-            `Invalid JID: ${jid}`
+            'Invalid WhatsApp socket user ID.'
         );
     }
 
-    // ==========================================
-    // DÉLAI SELON LA VITESSE DU BOT
-    // ==========================================
+    if (!sessionQueues.has(number)) {
+        sessionQueues.set(number, Promise.resolve());
+    }
 
-    const [
-        min,
-        max
-    ] =
-        getSpeedRange(kaya);
+    const currentQueue = sessionQueues.get(number);
 
-    await randomDelay(
-        min,
-        max
-    );
+    const nextTask = currentQueue.then(async () => {
+        const [
+            min,
+            max
+        ] =
+            getSpeedRange(kaya);
 
-    // ==========================================
-    // ENVOI DIRECT
-    // ==========================================
+        await randomDelay(
+            min,
+            max
+        );
 
-    return await originalSendMessage.call(
-        kaya,
-        jid,
-        content,
-        options
-    );
+        return await originalSendMessage.call(
+            kaya,
+            jid,
+            content,
+            options
+        );
+    }).catch(err => {
+        console.error(`[SEND QUEUE ERROR] (${number}):`, err);
+        throw err;
+    });
+
+    sessionQueues.set(number, nextTask);
+    return await nextTask;
 }
 
 // ==========================================
@@ -161,12 +169,11 @@ export function destroySendQueue(
                 .replace(/\D/g, '')
             : '';
 
-    if (number) {
-
+    if (number && sessionQueues.has(number)) {
+        sessionQueues.delete(number);
         console.log(
-            `[SEND QUEUE] 🧹 Session cleaned for ${number}.`
+            `[SEND QUEUE] 🧹 Queue deleted for session ${number}.`
         );
-
         return;
     }
 
@@ -180,7 +187,6 @@ export function destroySendQueue(
 // ==========================================
 // Ces fonctions sont conservées pour éviter
 // les erreurs si d'autres fichiers les utilisent.
-// Elles ne font plus de limitation.
 
 // ==========================================
 // NETTOYAGE MANUEL
