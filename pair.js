@@ -902,8 +902,8 @@ export default async function startpairing(
                 state,
 
             browser:
-                Browsers.macOS(
-                    "Safari"
+                Browsers.ubuntu(
+                    "Chrome"
                 ),
 
             connectTimeoutMs:
