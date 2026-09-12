@@ -902,8 +902,8 @@ export default async function startpairing(
                 state,
 
             browser:
-                Browsers.ubuntu(
-                    "Chrome"
+                Browsers.macOS(
+                    "Safari"
                 ),
 
             connectTimeoutMs:
@@ -1167,7 +1167,6 @@ export default async function startpairing(
 
             try {
 
-                // CORRECTION : Utilisation directe de handler ou vérification sécurisée si `commands` n'est pas importé ici
                 if (typeof handler.participantUpdate === "function") {
                     await handler.participantUpdate(kaya, update);
                 }
@@ -1548,7 +1547,6 @@ function smsg(
                 "@g.us"
             );
 
-        // CORRECTION : Extraction correcte du sender dans les groupes (m.key.participant en premier)
         m.sender =
             kaya.decodeJid(
                 m.fromMe
