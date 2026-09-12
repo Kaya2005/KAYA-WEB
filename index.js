@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -107,20 +105,22 @@ app.post(
                 });
             }
 
-            const webSessionId =
-                'web_' + Date.now();
-
             const requestPath =
                 path.join(
                     PAIRING_DIR,
-                    `request_${webSessionId}.json`
+                    `request_${cleanNumber}.json`
                 );
 
             const pairingFile =
                 path.join(
                     PAIRING_DIR,
-                    `pairing_${webSessionId}.json`
+                    `pairing_${cleanNumber}.json`
                 );
+
+            // Nettoyer un ancien fichier de pairing résiduel pour ce numéro avant de commencer
+            if (fs.existsSync(pairingFile)) {
+                fs.unlinkSync(pairingFile);
+            }
 
             // ==========================================
             // DEMANDE DE PAIRAGE
@@ -147,7 +147,7 @@ app.post(
             let codeData = null;
 
             while (
-                attempts < 20
+                attempts < 25
             ) {
 
                 if (
