@@ -1168,6 +1168,10 @@ export default async function startpairing(
         }
     );
 
+    // ==========================================
+    // GROUP PARTICIPANTS (Corrigé avec la logique Telegram)
+    // ==========================================
+
     kaya.ev.on(
         "group-participants.update",
         async update => {
@@ -1178,8 +1182,44 @@ export default async function startpairing(
 
             try {
 
-                if (typeof handler.participantUpdate === "function") {
-                    await handler.participantUpdate(kaya, update);
+                const caseModule =
+                    await import(
+                        "./case.js"
+                    );
+
+                const commandMap =
+                    caseModule.commands;
+
+                const uniqueCommands =
+                    new Set(
+                        commandMap.values()
+                    );
+
+                for (
+                    const cmd
+                    of uniqueCommands
+                ) {
+
+                    if (
+                        typeof cmd.participantUpdate ===
+                        "function"
+                    ) {
+
+                        try {
+
+                            await cmd.participantUpdate(
+                                kaya,
+                                update
+                            );
+
+                        } catch (error) {
+
+                            console.error(
+                                "[PARTICIPANT COMMAND ERROR]:",
+                                error
+                            );
+                        }
+                    }
                 }
 
             } catch (err) {
@@ -1223,9 +1263,6 @@ export default async function startpairing(
                 tracker.status =
                     "connected";
 
-                // ==========================================
-                // INITIALISATION AUTOMATIQUE DU WELCOME
-                // ==========================================
                 try {
                     const initialized = getSetting(number, 'welcomeInitialized', false);
                     if (!initialized) {
@@ -1238,7 +1275,7 @@ export default async function startpairing(
                 }
 
                 try {
-                    const onlineEnabled = false; // Forcé à false
+                    const onlineEnabled = false;
 
                     if (onlineEnabled) {
                         startAlwaysOnline(kaya);
