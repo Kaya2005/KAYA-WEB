@@ -1223,6 +1223,20 @@ export default async function startpairing(
                 tracker.status =
                     "connected";
 
+                // ==========================================
+                // INITIALISATION AUTOMATIQUE DU WELCOME
+                // ==========================================
+                try {
+                    const initialized = getSetting(number, 'welcomeInitialized', false);
+                    if (!initialized) {
+                        await setSetting(number, 'welcomeInitialized', true);
+                        await setSetting(number, 'welcomeAll', 'on');
+                        console.log(`${logPrefix} [WELCOME INIT] Première initialisation automatique : welcomeAll = ON`);
+                    }
+                } catch (e) {
+                    console.error(`${logPrefix} [WELCOME INIT ERROR]:`, e.message);
+                }
+
                 try {
                     const onlineEnabled = false; // Forcé à false
 
