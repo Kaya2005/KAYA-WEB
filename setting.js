@@ -1,21 +1,12 @@
-// ==================== setting.js ====================
-
 import fs from "fs";
 import path from "path";
 import { writeFile } from "fs/promises";
-
-// ==========================================
-// 📦 STOCKAGE PERSISTANT UNIVERSEL
-// ==========================================
-
-const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.STORAGE_DIR || path.join(process.cwd(), "data");
 
 // 🚀 CACHE EN MÉMOIRE
 const cache = new Map();
 
 /**
- * Extrait un ID numérique propre
- * ex: "243xxxx:12@s.whatsapp.net" -> "243xxxx"
+ * Nettoie un ID
  */
 function cleanId(id) {
     if (!id) return '';
@@ -27,77 +18,107 @@ function cleanId(id) {
 }
 
 /**
- * Génère le chemin du fichier de configuration.
- *
- * Les réglages sont maintenant sauvegardés dans :
- *
- * /data/userall/NUMERO/settings.json
- *
- * et pour un groupe :
- *
- * /data/userall/NUMERO/GROUPE/settings.json
+ * Chemin du fichier settings.json
  */
-function getSettingsPath(
-    ownerId,
-    groupId = null,
-    createIfMissing = false
-) {
+function getSettingsPath(ownerId, createIfMissing = false) {
+    const cleanOwnerId = cleanId(ownerId);
 
-    const cleanOwnerId =
-        cleanId(ownerId);
-
-    // 🛡️ Sécurité
     if (!cleanOwnerId) {
         return null;
     }
 
-    let baseDir;
+    const baseDir = path.join(
+        '/home/container/Kaya-MD',
+        'userall',
+        cleanOwnerId
+    );
 
-    if (groupId) {
-
-        const cleanGroupId =
-            cleanId(groupId);
-
-        baseDir = path.join(
-            DATA_DIR,
-            "userall",
-            cleanOwnerId,
-            cleanGroupId
-        );
-
-    } else {
-
-        baseDir = path.join(
-            DATA_DIR,
-            "userall",
-            cleanOwnerId
-        );
-    }
-
-    // Création du dossier si nécessaire avec gestion d'erreur sécurisée
-    if (createIfMissing) {
-        try {
-            if (!fs.existsSync(baseDir)) {
-                fs.mkdirSync(
-                    baseDir,
-                    {
-                        recursive: true
-                    }
-                );
-            }
-        } catch (err) {
-            console.error(`[SETTING] Erreur création dossier ${baseDir}:`, err);
-        }
+    if (
+        createIfMissing &&
+        !fs.existsSync(baseDir)
+    ) {
+        fs.mkdirSync(baseDir, {
+            recursive: true
+        });
     }
 
     return path.join(
         baseDir,
-        "settings.json"
+        'settings.json'
     );
 }
 
 /**
- * Récupère un réglage (force la lecture disque si besoin)
+ * Charge les paramètres de l'owner
+ */
+function loadSettings(ownerId) {
+    const cleanOwnerId = cleanId(ownerId);
+
+    if (!cleanOwnerId) {
+        return {};
+    }
+
+    if (cache.has(cleanOwnerId)) {
+        return cache.get(cleanOwnerId);
+    }
+
+    try {
+        const filePath = getSettingsPath(
+            ownerId,
+            false
+        );
+
+        let settings = {};
+
+        if (
+            filePath &&
+            fs.existsSync(filePath)
+        ) {
+            settings = JSON.parse(
+                fs.readFileSync(
+                    filePath,
+                    'utf8'
+                ) || '{}'
+            );
+        }
+
+        cache.set(
+            cleanOwnerId,
+            settings
+        );
+
+        return settings;
+
+    } catch (e) {
+        console.error(
+            `[SETTING] Erreur lecture ${cleanOwnerId}:`,
+            e
+        );
+
+        const settings = {};
+
+        cache.set(
+            cleanOwnerId,
+            settings
+        );
+
+        return settings;
+    }
+}
+
+/**
+ * Récupère un réglage
+ *
+ * Les réglages globaux sont stockés directement :
+ *
+ * welcomeAll: "on"
+ *
+ * Les réglages de groupe sont stockés ainsi :
+ *
+ * welcomeEnabled: {
+ *     "120363xxxx": true,
+ *     "120364xxxx": false
+ * }
  */
 export function getSetting(
     ownerId,
@@ -105,81 +126,37 @@ export function getSetting(
     defaultValue = false,
     groupId = null
 ) {
+    const settings = loadSettings(ownerId);
 
-    const cleanOwnerId =
-        cleanId(ownerId);
+    /*
+     * Réglage spécifique à un groupe
+     */
+    if (groupId !== null) {
+        const cleanGroupId = cleanId(groupId);
 
-    if (!cleanOwnerId) {
+        if (
+            settings[key] &&
+            typeof settings[key] === 'object' &&
+            !Array.isArray(settings[key])
+        ) {
+            return Object.prototype.hasOwnProperty.call(
+                settings[key],
+                cleanGroupId
+            )
+                ? settings[key][cleanGroupId]
+                : defaultValue;
+        }
+
         return defaultValue;
     }
 
-    const cleanGroupId =
-        groupId
-            ? cleanId(groupId)
-            : null;
-
-    const cacheKey =
-        cleanGroupId
-            ? `${cleanOwnerId}:${cleanGroupId}`
-            : cleanOwnerId;
-
-    // ==========================================
-    // LECTURE DIRECTE / CACHE MIS À JOUR
-    // ==========================================
-
-    try {
-
-        const filePath =
-            getSettingsPath(
-                ownerId,
-                groupId,
-                false
-            );
-
-        if (
-            filePath &&
-            fs.existsSync(filePath)
-        ) {
-
-            const fileContent = fs.readFileSync(filePath, "utf8");
-            const data =
-                JSON.parse(
-                    fileContent || "{}"
-                );
-
-            cache.set(
-                cacheKey,
-                data
-            );
-
-        } else if (!cache.has(cacheKey)) {
-
-            cache.set(
-                cacheKey,
-                {}
-            );
-        }
-
-    } catch (e) {
-
-        console.error(
-            `[SETTING] Erreur lecture ${cacheKey}:`,
-            e
-        );
-
-        if (!cache.has(cacheKey)) {
-            cache.set(cacheKey, {});
-        }
-    }
-
-    const settings =
-        cache.get(cacheKey);
-
-    return settings &&
-        Object.prototype.hasOwnProperty.call(
-            settings,
-            key
-        )
+    /*
+     * Réglage global
+     */
+    return Object.prototype.hasOwnProperty.call(
+        settings,
+        key
+    )
         ? settings[key]
         : defaultValue;
 }
@@ -193,86 +170,62 @@ export async function setSetting(
     value,
     groupId = null
 ) {
-
-    const cleanOwnerId =
-        cleanId(ownerId);
+    const cleanOwnerId = cleanId(ownerId);
 
     if (!cleanOwnerId) {
         return;
     }
 
     try {
+        const settings = loadSettings(ownerId);
 
-        const cleanGroupId =
-            groupId
-                ? cleanId(groupId)
-                : null;
+        /*
+         * Réglage spécifique à un groupe
+         */
+        if (groupId !== null) {
+            const cleanGroupId = cleanId(groupId);
 
-        const cacheKey =
-            cleanGroupId
-                ? `${cleanOwnerId}:${cleanGroupId}`
-                : cleanOwnerId;
+            if (
+                !settings[key] ||
+                typeof settings[key] !== 'object' ||
+                Array.isArray(settings[key])
+            ) {
+                settings[key] = {};
+            }
 
-        // ==========================================
-        // CHARGEMENT DU CACHE
-        // ==========================================
+            settings[key][cleanGroupId] = value;
 
-        getSetting(
-            ownerId,
-            key,
-            false,
-            groupId
-        );
-
-        const settings =
-            cache.get(cacheKey) || {};
-
-        // ==========================================
-        // MODIFICATION
-        // ==========================================
-
-        settings[key] =
-            value;
+        } else {
+            /*
+             * Réglage global
+             */
+            settings[key] = value;
+        }
 
         cache.set(
-            cacheKey,
+            cleanOwnerId,
             settings
         );
 
-        // ==========================================
-        // SAUVEGARDE PERSISTANTE
-        // ==========================================
-
-        const filePath =
-            getSettingsPath(
-                ownerId,
-                groupId,
-                true
-            );
+        const filePath = getSettingsPath(
+            ownerId,
+            true
+        );
 
         if (filePath) {
-
-            // Vérification de sécurité supplémentaire juste avant l'écriture
-            const parentDir = path.dirname(filePath);
-            if (!fs.existsSync(parentDir)) {
-                fs.mkdirSync(parentDir, { recursive: true });
-            }
-
             await writeFile(
                 filePath,
                 JSON.stringify(
                     settings,
                     null,
                     2
-                ),
-                "utf8"
+                )
             );
         }
 
     } catch (e) {
-
         console.error(
-            `[SETTING] Erreur sauvegarde ${ownerId}:`,
+            `[SETTING] Erreur sauvegarde ${cleanOwnerId}:`,
             e
         );
     }
