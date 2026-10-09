@@ -1,17 +1,26 @@
 // ==========================================
 // FILE: ./utils/kayaUtils.js
-// SIMPLE MESSAGE SENDER
+// SAFE MESSAGE QUEUE / RATE CONTROL
 // ==========================================
 
 import { getSetting } from '../setting.js';
+
+// ==========================================
+// STOCKAGE DES FILES D'ENVOI
+// ==========================================
+
+const sendQueues = new WeakMap();
+
+// Statistiques par socket
+const sendStats = new WeakMap();
 
 // ==========================================
 // DÉLAI ALÉATOIRE
 // ==========================================
 
 export const randomDelay = (
-    min = 3000,
-    max = 4000
+    min = 4000,
+    max = 6000
 ) => new Promise(resolve =>
     setTimeout(
         resolve,
@@ -26,7 +35,6 @@ export const randomDelay = (
 // ==========================================
 
 function getCleanNumber(jid = '') {
-
     return String(jid)
         .split('@')[0]
         .split(':')[0]
@@ -38,7 +46,6 @@ function getCleanNumber(jid = '') {
 // ==========================================
 
 function getSpeedRange(kaya) {
-
     const ownerId =
         kaya?.user?.id
             ? String(kaya.user.id)
@@ -49,7 +56,7 @@ function getSpeedRange(kaya) {
         getSetting(
             ownerId,
             'botSpeed',
-            '3-4'
+            '4-6'
         );
 
     switch (speedProfile) {
@@ -79,15 +86,102 @@ function getSpeedRange(kaya) {
             return [10000, 15000];
 
         default:
-            return [3000, 4000];
+            return [4000, 6000];
     }
 }
 
 // ==========================================
-// FILE D'ATTENTE SÉQUENTIELLE PAR SESSION (ANTI-BAN)
+// INITIALISER LES STATS
 // ==========================================
 
-const sessionQueues = new Map();
+function getStats(kaya) {
+
+    if (!sendStats.has(kaya)) {
+
+        sendStats.set(
+            kaya,
+            {
+                count: 0,
+                failed: 0,
+                queued: 0,
+                lastSend: 0
+            }
+        );
+    }
+
+    return sendStats.get(kaya);
+}
+
+// ==========================================
+// ENVOI INTERNE
+// ==========================================
+
+async function processSend(
+    kaya,
+    originalSendMessage,
+    jid,
+    content,
+    options
+) {
+
+    const stats = getStats(kaya);
+
+    const [min, max] =
+        getSpeedRange(kaya);
+
+    // ==========================================
+    // DÉLAI ENTRE LES ENVOIS
+    // ==========================================
+
+    await randomDelay(
+        min,
+        max
+    );
+
+    // ==========================================
+    // VÉRIFICATION SOCKET
+    // ==========================================
+
+    if (
+        !kaya ||
+        (!kaya.ws && !kaya.user)
+    ) {
+        throw new Error(
+            'WhatsApp socket is not connected.'
+        );
+    }
+
+    // ==========================================
+    // ENVOI
+    // ==========================================
+
+    try {
+
+        const result =
+            await originalSendMessage(
+                jid,
+                content,
+                options
+            );
+
+        stats.count++;
+
+        stats.lastSend =
+            Date.now();
+
+        return result;
+
+    } catch (error) {
+
+        stats.failed++;
+
+        throw error;
+    }
+}
+
+// ==========================================
+// SEND LIMITED
+// ==========================================
 
 export async function sendLimited(
     kaya,
@@ -99,7 +193,7 @@ export async function sendLimited(
 
     if (
         !kaya ||
-        !originalSendMessage
+        typeof originalSendMessage !== 'function'
     ) {
 
         throw new Error(
@@ -107,60 +201,140 @@ export async function sendLimited(
         );
     }
 
+    // ==========================================
+    // VÉRIFIER LE JID
+    // ==========================================
+
     const number =
-        getCleanNumber(kaya.user?.id);
+        getCleanNumber(jid);
 
     if (!number) {
 
         throw new Error(
-            'Invalid WhatsApp socket user ID.'
+            `Invalid JID: ${jid}`
         );
     }
 
-    if (!sessionQueues.has(number)) {
-        sessionQueues.set(number, Promise.resolve());
-    }
+    // ==========================================
+    // CRÉER UNE FILE POUR CETTE SESSION
+    // ==========================================
 
-    const currentQueue = sessionQueues.get(number);
+    if (!sendQueues.has(kaya)) {
 
-    const nextTask = currentQueue.then(async () => {
-        const [
-            min,
-            max
-        ] =
-            getSpeedRange(kaya);
-
-        await randomDelay(
-            min,
-            max
-        );
-
-        return await originalSendMessage.call(
+        sendQueues.set(
             kaya,
-            jid,
-            content,
-            options
+            {
+                promise: Promise.resolve(),
+                pending: 0,
+                destroyed: false
+            }
         );
-    }).catch(err => {
-        console.error(`[SEND QUEUE ERROR] (${number}):`, err);
-        throw err;
-    });
+    }
 
-    sessionQueues.set(number, nextTask);
-    return await nextTask;
+    const queue =
+        sendQueues.get(kaya);
+
+    // ==========================================
+    // VÉRIFIER SI LA FILE EST DÉTRUITE
+    // ==========================================
+
+    if (queue.destroyed) {
+
+        throw new Error(
+            'Send queue has been destroyed.'
+        );
+    }
+
+    const stats =
+        getStats(kaya);
+
+    queue.pending++;
+
+    stats.queued++;
+
+    // ==========================================
+    // AJOUT À LA FILE
+    // ==========================================
+
+    const current =
+        queue.promise;
+
+    let resolveTask;
+    let rejectTask;
+
+    const task =
+        new Promise(
+            (resolve, reject) => {
+
+                resolveTask = resolve;
+                rejectTask = reject;
+            }
+        );
+
+    queue.promise =
+        current
+            .catch(() => {})
+            .then(async () => {
+
+                if (queue.destroyed) {
+
+                    throw new Error(
+                        'Send queue destroyed.'
+                    );
+                }
+
+                return processSend(
+                    kaya,
+                    originalSendMessage,
+                    jid,
+                    content,
+                    options
+                );
+            })
+            .then(result => {
+
+                queue.pending--;
+
+                resolveTask(result);
+
+                return result;
+            })
+            .catch(error => {
+
+                queue.pending--;
+
+                rejectTask(error);
+            });
+
+    return task;
 }
 
 // ==========================================
-// DESTRUCTION / NETTOYAGE SESSION
+// NETTOYAGE SESSION
 // ==========================================
 
-export function destroySendQueue(
-    kaya
-) {
+export function destroySendQueue(kaya) {
 
     if (!kaya) {
         return;
     }
+
+    const queue =
+        sendQueues.get(kaya);
+
+    if (queue) {
+
+        queue.destroyed = true;
+
+        queue.pending = 0;
+
+        queue.promise =
+            Promise.resolve();
+
+        sendQueues.delete(kaya);
+    }
+
+    sendStats.delete(kaya);
 
     const number =
         kaya?.user?.id
@@ -169,32 +343,16 @@ export function destroySendQueue(
                 .replace(/\D/g, '')
             : '';
 
-    if (number && sessionQueues.has(number)) {
-        sessionQueues.delete(number);
-        console.log(
-            `[SEND QUEUE] 🧹 Queue deleted for session ${number}.`
-        );
-        return;
-    }
-
     console.log(
-        `[SEND QUEUE] 🧹 Session cleaned.`
+        `[SEND QUEUE] 🧹 Session cleaned${number ? ` for ${number}` : ''}.`
     );
 }
-
-// ==========================================
-// COMPATIBILITÉ
-// ==========================================
-// Ces fonctions sont conservées pour éviter
-// les erreurs si d'autres fichiers les utilisent.
 
 // ==========================================
 // NETTOYAGE MANUEL
 // ==========================================
 
-export function clearMessageCounter(
-    number
-) {
+export function clearMessageCounter(number) {
 
     const cleanNumber =
         String(number)
@@ -209,20 +367,51 @@ export function clearMessageCounter(
 // STATISTIQUES
 // ==========================================
 
-export function getMessageStats(
-    number
-) {
+export function getMessageStats(kaya) {
+
+    if (!kaya) {
+
+        return {
+            count: 0,
+            failed: 0,
+            queued: 0,
+            limit: Infinity,
+            remaining: Infinity,
+            paused: false,
+            pausedFor: 0
+        };
+    }
+
+    const stats =
+        getStats(kaya);
+
+    const queue =
+        sendQueues.get(kaya);
 
     return {
 
-        count: 0,
+        count:
+            stats.count,
 
-        limit: Infinity,
+        failed:
+            stats.failed,
 
-        remaining: Infinity,
+        queued:
+            queue?.pending || 0,
 
-        paused: false,
+        limit:
+            Infinity,
 
-        pausedFor: 0
+        remaining:
+            Infinity,
+
+        paused:
+            false,
+
+        pausedFor:
+            0,
+
+        lastSend:
+            stats.lastSend
     };
 }
