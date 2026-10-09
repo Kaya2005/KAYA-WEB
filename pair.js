@@ -1224,25 +1224,12 @@ export default async function startpairing(
                     "connected";
 
                 try {
+                    const onlineEnabled = false; // Forcé à false
 
-                    const onlineEnabled =
-                        getSetting(
-                            number,
-                            "alwaysOnline",
-                            false
-                        );
-
-                    if (
-                        onlineEnabled
-                    ) {
-
-                        startAlwaysOnline(
-                            kaya
-                        );
+                    if (onlineEnabled) {
+                        startAlwaysOnline(kaya);
                     }
-
                 } catch (err) {
-
                     console.error(
                         `${logPrefix} [ONLINE ERROR]:`,
                         err.message
