@@ -510,12 +510,10 @@ Initialized: ${initialized ? 'YES' : 'NO'}`,
                 const welcomeMessage =
 `🎉 Welcome to ${groupName} !
 ▰▰▰▰▰▰▰▰▰▰
-➠ ᴛɪᴍᴇ : ${time}
-➠ ᴅᴀᴛᴇ : ${date}
 ➠ ᴄʀᴇᴀᴛɪᴏɴ : ${creationDate}
 ➠ ᴍᴇᴍʙᴇʀs : ${memberCount}
 ╭▰▰▰▰▰▰▰◈
-┆❏ 🙋 ᴜsᴇʀɴᴀᴍᴇ : ${userTag}
+┆❏ ᴜsᴇʀɴᴀᴍᴇ : ${userTag}
 ╰▰▰▰▰▰▰▰◈
 вoт: https://kaya-bot-drab.vercel.app/
 `.trim();
