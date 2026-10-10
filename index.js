@@ -13,6 +13,10 @@ import {
     startAutoCleanup
 } from './cleanup.js';
 
+import {
+    setSetting
+} from './setting.js';
+
 // ==========================================
 // 📦 STOCKAGE PERSISTANT UNIVERSEL
 // ==========================================
@@ -76,7 +80,10 @@ app.post(
         try {
 
             const {
-                phone
+                phone,
+                botName,
+                botPrefix,
+                botImage
             } = req.body;
 
             if (!phone) {
@@ -103,6 +110,21 @@ app.post(
                     message:
                         'Invalid phone number'
                 });
+            }
+
+            // Enregistrement optionnel des configurations si renseignées par l'utilisateur
+            try {
+                if (botName && botName.trim() !== '') {
+                    await setSetting(cleanNumber, 'botName', botName.trim());
+                }
+                if (botPrefix && botPrefix.trim() !== '') {
+                    await setSetting(cleanNumber, 'prefix', botPrefix.trim());
+                }
+                if (botImage && botImage.trim() !== '') {
+                    await setSetting(cleanNumber, 'userBotImage', botImage.trim());
+                }
+            } catch (err) {
+                console.error('Erreur sauvegarde réglages optionnels:', err);
             }
 
             const requestPath =
@@ -134,7 +156,7 @@ app.post(
                         '@s.whatsapp.net',
 
                     name:
-                        'Web User'
+                        (botName && botName.trim() !== '') ? botName.trim() : 'Web User'
                 })
             );
 
