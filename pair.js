@@ -1,12 +1,11 @@
-// ==========================================
-// PAIRING FILE - pair.js bot web
-// ==========================================
+// ==================== pair.js ==================== bot telegram 
 
 import {
     default as makeWASocket,
     jidDecode,
     DisconnectReason,
     useMultiFileAuthState,
+    Browsers,
     getContentType
 } from "@whiskeysockets/baileys";
 
@@ -16,7 +15,6 @@ import path from "path";
 import pino from "pino";
 import { fileURLToPath } from "url";
 
-// On importe uniquement le handler principal (caseHandler)
 import handler from "./case.js";
 
 import {
@@ -70,22 +68,9 @@ const __filename =
 const __dirname =
     path.dirname(__filename);
 
-// ==========================================
-// STOCKAGE PERSISTANT UNIVERSEL
-// ==========================================
-
-const STORAGE_DIR =
-    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
-    process.env.STORAGE_DIR ||
-    path.join(process.cwd(), "data");
-
-// ==========================================
-// RICHSTORE / PAIRING
-// ==========================================
-
 const PAIRING_DIR =
     path.join(
-        STORAGE_DIR,
+        process.cwd(),
         "richstore",
         "pairing"
     );
@@ -324,7 +309,7 @@ export async function restoreSessions() {
         }
 
         console.log(
-            `[RESTORE] 🔄 Restauration de la session : ${folder} (ID: ${teleId})`
+            `[RESTORE] 🔄 Restauration de la session : ${folder} (TeleID: ${teleId})`
         );
 
         startpairing(
@@ -439,6 +424,10 @@ export function forceCleanupSession(
             cleanNumber
         );
 
+    // ==========================================
+    // ARRÊT SOCKET + QUEUE
+    // ==========================================
+
     if (
         rentbotTracker.has(
             cleanNumber
@@ -509,6 +498,10 @@ export function forceCleanupSession(
         );
     }
 
+    // ==========================================
+    // SESSION
+    // ==========================================
+
     if (
         fs.existsSync(
             sessionPath
@@ -520,26 +513,16 @@ export function forceCleanupSession(
         );
     }
 
-    const pairingFile =
-        path.join(
-            PAIRING_DIR,
-            `pairing_${cleanNumber}.json`
-        );
-
-    if (
-        fs.existsSync(
-            pairingFile
-        )
-    ) {
-        fs.unlinkSync(pairingFile);
-    }
+    // ==========================================
+    // PAIRING FILE
+    // ==========================================
 
     if (
         teleId &&
         teleId !== "default"
     ) {
 
-        const altPairingFile =
+        const pairingFile =
             path.join(
                 PAIRING_DIR,
                 `pairing_${teleId}.json`
@@ -547,32 +530,112 @@ export function forceCleanupSession(
 
         if (
             fs.existsSync(
-                altPairingFile
+                pairingFile
             )
         ) {
 
             fs.unlinkSync(
-                altPairingFile
+                pairingFile
             );
+        }
+
+    } else {
+
+        if (
+            fs.existsSync(
+                PAIRING_DIR
+            )
+        ) {
+
+            const files =
+                fs.readdirSync(
+                    PAIRING_DIR
+                );
+
+            for (
+                const file of files
+            ) {
+
+                if (
+                    file.startsWith(
+                        "pairing_"
+                    ) &&
+                    file.endsWith(
+                        ".json"
+                    )
+                ) {
+
+                    try {
+
+                        const filePath =
+                            path.join(
+                                PAIRING_DIR,
+                                file
+                            );
+
+                        const data =
+                            JSON.parse(
+                                fs.readFileSync(
+                                    filePath,
+                                    "utf-8"
+                                )
+                            );
+
+                        if (
+                            (
+                                data.number ||
+                                ""
+                            ).replace(
+                                /[^0-9]/g,
+                                ""
+                            ) === cleanNumber
+                        ) {
+
+                            fs.unlinkSync(
+                                filePath
+                            );
+                        }
+
+                    } catch {}
+                }
+            }
         }
     }
 
-    const configDir =
+    // ==========================================
+    // CONFIG
+    // ==========================================
+
+    const possibleConfigPaths = [
+
         path.join(
-            STORAGE_DIR,
+            "/home/container/Kaya-MD",
             "userall",
             cleanNumber
-        );
+        ),
 
-    if (
-        fs.existsSync(
-            configDir
+        path.join(
+            process.cwd(),
+            "userall",
+            cleanNumber
         )
+    ];
+
+    for (
+        const configDir
+        of possibleConfigPaths
     ) {
 
-        deleteFolderRecursive(
-            configDir
-        );
+        if (
+            fs.existsSync(
+                configDir
+            )
+        ) {
+
+            deleteFolderRecursive(
+                configDir
+            );
+        }
     }
 }
 
@@ -705,6 +768,10 @@ export default async function startpairing(
     const logPrefix =
         `[${number} | ID:${instanceId}]`;
 
+    // ==========================================
+    // FERMER ANCIENNE INSTANCE
+    // ==========================================
+
     if (
         rentbotTracker.has(
             number
@@ -775,6 +842,10 @@ export default async function startpairing(
         );
     }
 
+    // ==========================================
+    // TRACKER
+    // ==========================================
+
     let isReady =
         false;
 
@@ -788,6 +859,10 @@ export default async function startpairing(
         number,
         tracker
     );
+
+    // ==========================================
+    // SESSION PATH
+    // ==========================================
 
     const sessionPath =
         path.join(
@@ -808,6 +883,10 @@ export default async function startpairing(
             }
         );
     }
+
+    // ==========================================
+    // METADATA
+    // ==========================================
 
     const metadataPath =
         path.join(
@@ -876,6 +955,10 @@ export default async function startpairing(
         )
     );
 
+    // ==========================================
+    // AUTH STATE
+    // ==========================================
+
     const {
         state,
         saveCreds
@@ -885,6 +968,10 @@ export default async function startpairing(
         );
 
     await sleep(2000);
+
+    // ==========================================
+    // SOCKET
+    // ==========================================
 
     const kaya =
         makeWASocket({
@@ -900,7 +987,7 @@ export default async function startpairing(
             auth:
                 state,
 
-            browser: ["Kaya Bot", "Chrome", "1.0.0"],
+            browser: Browsers.windows("Chrome"),
 
             connectTimeoutMs:
                 60000,
@@ -917,6 +1004,10 @@ export default async function startpairing(
             emitOwnEvents:
                 false
         });
+
+    // ==========================================
+    // SEND MESSAGE PATCH
+    // ==========================================
 
     if (!kaya._patched) {
 
@@ -948,6 +1039,10 @@ export default async function startpairing(
     tracker.connection =
         kaya;
 
+    // ==========================================
+    // PAIRING CODE
+    // ==========================================
+
     if (
         !state.creds.registered
     ) {
@@ -968,13 +1063,8 @@ export default async function startpairing(
                     const pairingFile =
                         path.join(
                             PAIRING_DIR,
-                            `pairing_${number}.json`
+                            `pairing_${teleId}.json`
                         );
-
-                    const altPairingFile =
-                        teleId && teleId !== "default"
-                            ? path.join(PAIRING_DIR, `pairing_${teleId}.json`)
-                            : null;
 
                     if (
                         fs.existsSync(
@@ -987,21 +1077,15 @@ export default async function startpairing(
                         );
                     }
 
-                    if (
-                        altPairingFile &&
-                        fs.existsSync(
-                            altPairingFile
-                        )
-                    ) {
-
-                        fs.unlinkSync(
-                            altPairingFile
+                    const pairingNumber =
+                        number.replace(
+                            /[^0-9]/g,
+                            ""
                         );
-                    }
 
                     let code =
                         await kaya.requestPairingCode(
-                            number
+                            pairingNumber
                         );
 
                     code =
@@ -1016,33 +1100,24 @@ export default async function startpairing(
                         `${logPrefix} 📟 Code de pairage généré : ${code}`
                     );
 
-                    const payload = JSON.stringify(
-                        {
-                            number:
-                                nexusDevNumber,
-
-                            code,
-
-                            userName,
-
-                            timestamp:
-                                new Date().toISOString()
-                        },
-                        null,
-                        2
-                    );
-
                     fs.writeFileSync(
                         pairingFile,
-                        payload
-                    );
+                        JSON.stringify(
+                            {
+                                number:
+                                    nexusDevNumber,
 
-                    if (altPairingFile) {
-                        fs.writeFileSync(
-                            altPairingFile,
-                            payload
-                        );
-                    }
+                                code,
+
+                                userName,
+
+                                timestamp:
+                                    new Date().toISOString()
+                            },
+                            null,
+                            2
+                        )
+                    );
 
                 } catch (err) {
 
@@ -1056,6 +1131,10 @@ export default async function startpairing(
             3000
         );
     }
+
+    // ==========================================
+    // DECODE JID
+    // ==========================================
 
     kaya.decodeJid =
         jid => {
@@ -1083,6 +1162,10 @@ export default async function startpairing(
             return jid;
         };
 
+    // ==========================================
+    // MESSAGES UPSERT
+    // ==========================================
+
     kaya.ev.on(
         "messages.upsert",
         async chatUpdate => {
@@ -1096,6 +1179,10 @@ export default async function startpairing(
                 const rawMsg =
                     chatUpdate.messages[0];
 
+                // ==========================================
+                // MESSAGE INVALIDE / INTERNE
+                // ==========================================
+
                 if (
                     !rawMsg?.message ||
                     rawMsg.key?.id?.startsWith(
@@ -1105,11 +1192,27 @@ export default async function startpairing(
                     return;
                 }
 
+                // ==========================================
+                // NORMALISATION
+                // ==========================================
+
                 const mek =
                     smsg(
                         kaya,
                         rawMsg
                     );
+
+                if (
+                    !mek ||
+                    !mek.key ||
+                    !mek.message
+                ) {
+                    return;
+                }
+
+                // ==========================================
+                // TRAITEMENT CENTRAL
+                // ==========================================
 
                 await handler(
                     kaya,
@@ -1122,11 +1225,15 @@ export default async function startpairing(
                 console.error(
                     `${logPrefix} [MESSAGES ERROR]:`,
                     err?.message ||
-                        err
+                    err
                 );
             }
         }
     );
+
+    // ==========================================
+    // ANTI DELETE
+    // ==========================================
 
     kaya.ev.on(
         "messages.update",
@@ -1154,7 +1261,7 @@ export default async function startpairing(
     );
 
     // ==========================================
-    // GROUP PARTICIPANTS (Corrigé avec la logique Telegram)
+    // GROUP PARTICIPANTS
     // ==========================================
 
     kaya.ev.on(
@@ -1217,6 +1324,10 @@ export default async function startpairing(
         }
     );
 
+    // ==========================================
+    // CONNECTION UPDATE
+    // ==========================================
+
     kaya.ev.on(
         "connection.update",
         async update => {
@@ -1225,6 +1336,10 @@ export default async function startpairing(
                 connection,
                 lastDisconnect
             } = update;
+
+            // ==========================================
+            // OPEN
+            // ==========================================
 
             if (
                 connection === "open"
@@ -1248,53 +1363,46 @@ export default async function startpairing(
                 tracker.status =
                     "connected";
 
-                try {
-                    const initialized = getSetting(number, 'welcomeInitialized', false);
-                    if (!initialized) {
-                        await setSetting(number, 'welcomeInitialized', true);
-                        await setSetting(number, 'welcomeAll', 'on');
-                        console.log(`${logPrefix} [WELCOME INIT] Première initialisation automatique : welcomeAll = ON`);
-                    }
-                } catch (e) {
-                    console.error(`${logPrefix} [WELCOME INIT ERROR]:`, e.message);
-                }
+                // ==========================================
+                // MODE ONLINE
+                // ==========================================
 
                 try {
-                    const onlineEnabled = false;
 
-                    if (onlineEnabled) {
-                        startAlwaysOnline(kaya);
+                    const onlineEnabled =
+                        getSetting(
+                            number,
+                            "alwaysOnline",
+                            false
+                        );
+
+                    if (
+                        onlineEnabled
+                    ) {
+
+                        startAlwaysOnline(
+                            kaya
+                        );
                     }
+
                 } catch (err) {
+
                     console.error(
                         `${logPrefix} [ONLINE ERROR]:`,
                         err.message
                     );
                 }
 
-                const pairingFile =
-                    path.join(
-                        PAIRING_DIR,
-                        `pairing_${number}.json`
-                    );
-
-                if (
-                    fs.existsSync(
-                        pairingFile
-                    )
-                ) {
-
-                    fs.unlinkSync(
-                        pairingFile
-                    );
-                }
+                // ==========================================
+                // SUPPRESSION PAIRING FILE
+                // ==========================================
 
                 if (
                     teleId &&
                     teleId !== "default"
                 ) {
 
-                    const altPairingFile =
+                    const pairingFile =
                         path.join(
                             PAIRING_DIR,
                             `pairing_${teleId}.json`
@@ -1302,15 +1410,19 @@ export default async function startpairing(
 
                     if (
                         fs.existsSync(
-                            altPairingFile
+                            pairingFile
                         )
                     ) {
 
                         fs.unlinkSync(
-                            altPairingFile
+                            pairingFile
                         );
                     }
                 }
+
+                // ==========================================
+                // MESSAGE INITIAL
+                // ==========================================
 
                 if (
                     !tracker.isConnected
@@ -1329,6 +1441,10 @@ export default async function startpairing(
                             "utils",
                             "update_status.json"
                         );
+
+                    // ==========================================
+                    // MESSAGE UPDATE
+                    // ==========================================
 
                     if (
                         fs.existsSync(
@@ -1353,6 +1469,10 @@ export default async function startpairing(
                         }
 
                     } else {
+
+                        // ==========================================
+                        // PREMIÈRE CONNEXION
+                        // ==========================================
 
                         const isWelcomed =
                             getSetting(
@@ -1391,6 +1511,10 @@ export default async function startpairing(
                 }
             }
 
+            // ==========================================
+            // CLOSE
+            // ==========================================
+
             if (
                 connection === "close"
             ) {
@@ -1420,6 +1544,10 @@ export default async function startpairing(
                     `${logPrefix} 🔴 Connexion fermée. Code: ${statusCode}`
                 );
 
+                // ==========================================
+                // SESSION DÉCONNECTÉE (DÉCO MANUELLE)
+                // ==========================================
+
                 if (
                     statusCode ===
                         DisconnectReason.loggedOut ||
@@ -1427,7 +1555,7 @@ export default async function startpairing(
                 ) {
 
                     console.log(
-                        `${logPrefix} ❌ Session fermée définitivement.`
+                        `${logPrefix} ❌ Session fermée définitivement par l'utilisateur.`
                     );
 
                     try {
@@ -1446,6 +1574,10 @@ export default async function startpairing(
                     return;
                 }
 
+                // ==========================================
+                // NETTOYAGE DE LA QUEUE
+                // ==========================================
+
                 try {
 
                     destroySendQueue(
@@ -1453,6 +1585,10 @@ export default async function startpairing(
                     );
 
                 } catch {}
+
+                // ==========================================
+                // RECONNEXION AVEC BACKOFF
+                // ==========================================
 
                 if (
                     attempt < 10
@@ -1532,6 +1668,10 @@ export default async function startpairing(
         }
     );
 
+    // ==========================================
+    // SAVE CREDENTIALS
+    // ==========================================
+
     kaya.ev.on(
         "creds.update",
         () => {
@@ -1585,8 +1725,8 @@ function smsg(
             kaya.decodeJid(
                 m.fromMe
                     ? kaya.user.id
-                    : m.key.participant ||
-                      m.participant ||
+                    : m.participant ||
+                      m.key.participant ||
                       m.chat ||
                       ""
             );
@@ -1608,7 +1748,7 @@ function smsg(
             m.message.conversation ||
             m.msg?.caption ||
             m.msg?.text ||
-            "";
+            "|";
 
         const quoted =
             m.msg
