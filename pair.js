@@ -7,7 +7,6 @@ import {
     jidDecode,
     DisconnectReason,
     useMultiFileAuthState,
-    Browsers,
     getContentType
 } from "@whiskeysockets/baileys";
 
@@ -96,19 +95,6 @@ if (!fs.existsSync(PAIRING_DIR)) {
         PAIRING_DIR,
         { recursive: true }
     );
-}
-
-// ==========================================
-// RANDOM BROWSER ROTATION
-// ==========================================
-
-function getRandomBrowser() {
-    const options = [
-        Browsers.macOS("Safari"),
-        Browsers.windows("Chrome"),
-        Browsers.ubuntu("Firefox")
-    ];
-    return options[Math.floor(Math.random() * options.length)];
 }
 
 // ==========================================
@@ -914,8 +900,7 @@ export default async function startpairing(
             auth:
                 state,
 
-            browser:
-                getRandomBrowser(),
+            browser: ["Kaya Bot", "Chrome", "1.0.0"],
 
             connectTimeoutMs:
                 60000,
