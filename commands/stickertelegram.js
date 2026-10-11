@@ -24,18 +24,32 @@ export default {
     name: 'tg',
     alias: ['telegram', 'stickertg'],
     category: 'Tools',
-    description: 'Download Telegram sticker pack',
+    description: 'Download Telegram sticker pack with custom packname',
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            const url = args[0];
-
-            if (!url) {
+            if (!args[0]) {
                 return kaya.sendMessage(
                     from,
-                    { text: `⚠️ Exemple:\n${prefix}tg https://t.me/addstickers/NomDuPack` },
+                    { 
+                        text: `⚠️ *Exemple d'utilisation :*\n\n` +
+                              `1️⃣ *Par défaut :*\n${prefix}tg https://t.me/addstickers/NomDuPack\n\n` +
+                              `2️⃣ *Nom personnalisé :*\n${prefix}tg naya https://t.me/addstickers/NomDuPack` 
+                    },
                     { quoted: mek }
                 );
+            }
+
+            let customPackName = '';
+            let url = '';
+
+            // Si au moins 2 arguments sont fournis (ex: .tg naya https://t.me/...)
+            if (args.length >= 2) {
+                url = args[args.length - 1];
+                customPackName = args.slice(0, args.length - 1).join(' ');
+            } else {
+                url = args[0];
+                customPackName = global.botName || 'KAYA-MD';
             }
 
             if (!url.includes('t.me/addstickers/')) {
@@ -64,10 +78,8 @@ export default {
                 stickers = stickers.slice(0, MAX_STICKERS);
             }
 
-            const botName = global.botName || 'KAYA-MD';
-
             await kaya.sendMessage(from, {
-                text: `📦 Pack: ${stickers.length} stickers\n⏳ Téléchargement en cours...`
+                text: `📦 *Pack:* ${stickers.length} stickers\n🏷️ *Nom attribué:* ${customPackName}\n⏳ Envoi en cours...`
             }, { quoted: mek });
 
             let success = 0;
@@ -101,14 +113,15 @@ export default {
 
                     await convertMedia(input, output, isAnimated);
 
+                    // Utilisation du nom personnalisé pour le packname et l'author
                     const exifFile = await writeExif(
                         {
                             data: fs.readFileSync(output),
                             mimetype: 'image/webp'
                         },
                         {
-                            packname: botName,
-                            author: botName,
+                            packname: customPackName,
+                            author: customPackName,
                             categories: [sticker.emoji || '🤖']
                         }
                     );
