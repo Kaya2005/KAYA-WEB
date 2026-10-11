@@ -2,104 +2,103 @@ import fs from 'fs';
 import path from 'path';
 
 export function startAutoCleanup() {
-    console.log("🧹 [CLEANUP] Initialisation du nettoyage approfondi au démarrage...");
-    const targetDir = process.cwd(); 
-    const PAIRING_DIR = path.join(targetDir, "richstore", "pairing");
+const targetDir = process.cwd();
+const PAIRING_DIR = path.join(targetDir, 'richstore', 'pairing');
 
+console.log('🧹 [CLEANUP] Nettoyage au démarrage...');
+
+let deletedCount = 0;
+
+const removeFile = (filePath) => {
     try {
-        console.log("🧹 [CLEANUP] Analyse et purge de l'espace de stockage...");
-        let deletedCount = 0;
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+            deletedCount++;
+        }
+    } catch (err) {
+        console.error(`[CLEANUP] Impossible de supprimer ${filePath}:`, err.message);
+    }
+};
 
-        // 1. Nettoyage agressif des fichiers temporaires, caches et webp à la racine ou dans le projet
-        const cleanRecursiveDir = (dir) => {
-            if (!fs.existsSync(dir)) return;
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-            for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name);
-
-                if (entry.isDirectory()) {
-                    // Ne jamais toucher aux dossiers de sessions principaux ou creds.json
-                    if (entry.name === 'pairing' || entry.name === 'node_modules' || entry.name === '.git') {
-                        cleanRecursiveDir(fullPath);
-                        continue;
-                    }
-                    // Supprimer d'autres sous-dossiers de cache ou temporaires s'ils existent
-                    try {
-                        fs.rmSync(fullPath, { recursive: true, force: true });
-                        deletedCount++;
-                    } catch (e) {}
-                } else {
-                    // Supprimer tous les fichiers temporaires, logs, webp orphelins, zip, etc.
-                    if (
-                        entry.name.startsWith('tmp_') || 
-                        entry.name.startsWith('out_') || 
-                        entry.name.endsWith('.webp') || 
-                        entry.name.endsWith('.mp4') || 
-                        entry.name.endsWith('.zip') ||
-                        entry.name.endsWith('.log')
-                    ) {
-                        try {
-                            fs.unlinkSync(fullPath);
-                            deletedCount++;
-                        } catch (e) {}
-                    }
-                }
+try {
+    // 1. Supprimer les fichiers temporaires à chaque démarrage
+    if (fs.existsSync(targetDir)) {
+        for (const file of fs.readdirSync(targetDir)) {
+            if (
+                file.startsWith('tmp_') ||
+                (file.startsWith('out_') && file.endsWith('.webp'))
+            ) {
+                removeFile(path.join(targetDir, file));
             }
-        };
+        }
+    }
 
-        cleanRecursiveDir(targetDir);
-
-        // 2. Nettoyage immédiat des fichiers de requêtes de pairage bloqués
-        if (fs.existsSync(PAIRING_DIR)) {
-            const pairingFiles = fs.readdirSync(PAIRING_DIR);
-            pairingFiles.forEach(file => {
-                if (file.startsWith('request_') || file.startsWith('pairing_')) {
-                    const filePath = path.join(PAIRING_DIR, file);
-                    try {
-                        fs.unlinkSync(filePath);
-                        deletedCount++;
-                    } catch (e) {}
-                }
-            });
-
-            // 3. Nettoyage à l'intérieur des dossiers de sessions (suppression des caches internes obsolètes sans toucher à creds.json)
-            const sessionFolders = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
-            
-            sessionFolders.forEach(folder => {
-                if (!folder.isDirectory()) return;
-
-                const sessionPath = path.join(PAIRING_DIR, folder.name);
-                const credsPath = path.join(sessionPath, "creds.json");
-                
-                // Si la session n'a pas de creds.json, on supprime carrément le dossier orphelin
-                if (!fs.existsSync(credsPath)) {
-                    try {
-                        fs.rmSync(sessionPath, { recursive: true, force: true });
-                        deletedCount++;
-                        return;
-                    } catch (e) {}
-                }
-
-                // Nettoyer les fichiers de cache internes inutiles dans la session (laissant creds.json et metadata.json intacts)
-                try {
-                    const innerFiles = fs.readdirSync(sessionPath);
-                    innerFiles.forEach(file => {
-                        if (file === "creds.json" || file === "metadata.json") return;
-
-                        const innerFilePath = path.join(sessionPath, file);
-                        try {
-                            fs.rmSync(innerFilePath, { recursive: true, force: true });
-                            deletedCount++;
-                        } catch (e) {}
-                    });
-                } catch (e) {}
-            });
+    // 2. Nettoyer les demandes de pairage à chaque démarrage
+    if (fs.existsSync(PAIRING_DIR)) {
+        for (const file of fs.readdirSync(PAIRING_DIR)) {
+            if (
+                file.startsWith('request_') ||
+                file.startsWith('pairing_')
+            ) {
+                removeFile(path.join(PAIRING_DIR, file));
+            }
         }
 
-        console.log(`🧹 [CLEANUP] Nettoyage terminé avec succès : ${deletedCount} éléments obsolètes ou fichiers lourds purgés.`);
+        // 3. Nettoyer les dossiers de sessions sans identifiants
+        for (const folder of fs.readdirSync(PAIRING_DIR)) {
+            const sessionPath = path.join(PAIRING_DIR, folder);
 
-    } catch (err) {
-        console.error('❌ Erreur lors du nettoyage approfondi au démarrage :', err);
+            try {
+                if (!fs.statSync(sessionPath).isDirectory()) continue;
+
+                const credsPath = path.join(sessionPath, 'creds.json');
+
+                // Supprimer uniquement les dossiers sans creds.json
+                if (!fs.existsSync(credsPath)) {
+                    fs.rmSync(sessionPath, {
+                        recursive: true,
+                        force: true
+                    });
+                    deletedCount++;
+                    continue;
+                }
+
+                // 4. Nettoyer les anciens fichiers de cache
+                const now = Date.now();
+
+                for (const file of fs.readdirSync(sessionPath)) {
+                    if (file === 'creds.json' || file === 'metadata.json') {
+                        continue;
+                    }
+
+                    const filePath = path.join(sessionPath, file);
+
+                    try {
+                        const stats = fs.statSync(filePath);
+
+                        // Ne supprimer que les fichiers de plus de 7 jours
+                        if (
+                            stats.isFile() &&
+                            (now - stats.mtimeMs) > 7 * 24 * 60 * 60 * 1000
+                        ) {
+                            removeFile(filePath);
+                        }
+                    } catch (err) {}
+                }
+            } catch (err) {
+                console.error(
+                    `[CLEANUP] Erreur sur ${folder}:`,
+                    err.message
+                );
+            }
+        }
     }
+
+    console.log(
+        `🧹 [CLEANUP] Démarrage terminé : ${deletedCount} éléments supprimés.`
+    );
+} catch (err) {
+    console.error('[CLEANUP] Erreur générale :', err);
+}
+
 }
