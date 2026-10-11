@@ -1,4 +1,3 @@
-
 // ==========================================
 // PAIRING FILE - pair.js bot web
 // ==========================================
@@ -907,7 +906,7 @@ export default async function startpairing(
             logger:
                 pino({
                     level: "silent"
-                }),
+                }).child({ level: "silent" }),
 
             printQRInTerminal:
                 false,
