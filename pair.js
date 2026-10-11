@@ -240,7 +240,7 @@ export function watchPairingRequests() {
 }
 
 // ==========================================
-// RESTAURATION DES SESSIONS
+// RESTAURATION DES SESSIONS (Échelonnée et sécurisée)
 // ==========================================
 
 export async function restoreSessions() {
@@ -353,14 +353,17 @@ export async function restoreSessions() {
             );
         });
 
+        // Petit délai échelonné de 1,5 seconde pour éviter les pics de charge CPU / Disque (ENOSPC)
         await new Promise(
             resolve =>
                 setTimeout(
                     resolve,
-                    5000
+                    1500
                 )
         );
     }
+
+    console.log(`[RESTORE] ✅ Processus de restauration des sessions initié.`);
 }
 
 // ==========================================
