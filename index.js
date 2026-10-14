@@ -18,14 +18,15 @@ import {
 } from './setting.js';
 
 // ==========================================
-// 📦 REPERTOIRE LOCAL DE STOCKAGE
+// 📦 REPERTOIRE LOCAL DE STOCKAGE UNIFIÉ
 // ==========================================
 
-const RICHSTORE_DIR =
-    path.join(process.cwd(), 'richstore');
+const BASE_DIR = fs.existsSync("/home/container/Kaya-MD")
+    ? "/home/container/Kaya-MD"
+    : process.cwd();
 
-const PAIRING_DIR =
-    path.join(RICHSTORE_DIR, 'pairing');
+const RICHSTORE_DIR = path.join(BASE_DIR, 'data', 'richstore');
+const PAIRING_DIR = path.join(RICHSTORE_DIR, 'pairing');
 
 // ==========================================
 // 📁 CRÉATION DES DOSSIERS
