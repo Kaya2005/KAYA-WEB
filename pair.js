@@ -72,21 +72,12 @@ const __dirname =
     path.dirname(__filename);
 
 // ==========================================
-// STOCKAGE PERSISTANT UNIVERSEL
-// ==========================================
-
-const STORAGE_DIR =
-    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
-    process.env.STORAGE_DIR ||
-    path.join(process.cwd(), "data");
-
-// ==========================================
-// RICHSTORE / PAIRING
+// DOSSIER PAIRING LOCAL
 // ==========================================
 
 const PAIRING_DIR =
     path.join(
-        STORAGE_DIR,
+        process.cwd(),
         "richstore",
         "pairing"
     );
@@ -573,7 +564,7 @@ export function forceCleanupSession(
 
     const configDir =
         path.join(
-            STORAGE_DIR,
+            process.cwd(),
             "userall",
             cleanNumber
         );
@@ -1169,7 +1160,7 @@ export default async function startpairing(
     );
 
     // ==========================================
-    // GROUP PARTICIPANTS (Corrigé avec la logique Telegram)
+    // GROUP PARTICIPANTS
     // ==========================================
 
     kaya.ev.on(

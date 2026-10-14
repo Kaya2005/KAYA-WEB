@@ -18,16 +18,11 @@ import {
 } from './setting.js';
 
 // ==========================================
-// 📦 STOCKAGE PERSISTANT UNIVERSEL
+// 📦 REPERTOIRE LOCAL DE STOCKAGE
 // ==========================================
 
-const DATA_DIR =
-    process.env.RAILWAY_VOLUME_MOUNT_PATH ||
-    process.env.STORAGE_DIR ||
-    path.join(process.cwd(), 'data');
-
 const RICHSTORE_DIR =
-    path.join(DATA_DIR, 'richstore');
+    path.join(process.cwd(), 'richstore');
 
 const PAIRING_DIR =
     path.join(RICHSTORE_DIR, 'pairing');
@@ -112,7 +107,6 @@ app.post(
                 });
             }
 
-            // Enregistrement optionnel des configurations si renseignées par l'utilisateur
             try {
                 if (botName && botName.trim() !== '') {
                     await setSetting(cleanNumber, 'botName', botName.trim());
@@ -139,7 +133,6 @@ app.post(
                     `pairing_${cleanNumber}.json`
                 );
 
-            // Nettoyer un ancien fichier de pairing résiduel pour ce numéro avant de commencer
             if (fs.existsSync(pairingFile)) {
                 fs.unlinkSync(pairingFile);
             }
@@ -388,12 +381,6 @@ async function launchBot() {
             console.log(
                 chalk.green(
                     `🌐 Server running on port ${PORT}`
-                )
-            );
-
-            console.log(
-                chalk.green(
-                    `💾 Stockage persistant : ${DATA_DIR}`
                 )
             );
 
