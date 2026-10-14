@@ -72,15 +72,19 @@ const __dirname =
     path.dirname(__filename);
 
 // ==========================================
-// DOSSIER PAIRING LOCAL
+// DOSSIER PAIRING UNIFIÉ (Chemin absolu ou relatif propre)
 // ==========================================
 
-const PAIRING_DIR =
-    path.join(
-        process.cwd(),
-        "richstore",
-        "pairing"
-    );
+const BASE_DIR = fs.existsSync("/home/container/Kaya-MD")
+    ? "/home/container/Kaya-MD"
+    : process.cwd();
+
+const PAIRING_DIR = path.join(
+    BASE_DIR,
+    "data",
+    "richstore",
+    "pairing"
+);
 
 if (!fs.existsSync(PAIRING_DIR)) {
     fs.mkdirSync(
@@ -564,7 +568,8 @@ export function forceCleanupSession(
 
     const configDir =
         path.join(
-            process.cwd(),
+            BASE_DIR,
+            "data",
             "userall",
             cleanNumber
         );
@@ -1331,7 +1336,7 @@ export default async function startpairing(
 
                     const statusFile =
                         path.join(
-                            process.cwd(),
+                            BASE_DIR,
                             "utils",
                             "update_status.json"
                         );
