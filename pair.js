@@ -569,7 +569,6 @@ export function forceCleanupSession(
     const configDir =
         path.join(
             BASE_DIR,
-            "data",
             "userall",
             cleanNumber
         );
