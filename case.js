@@ -1159,6 +1159,14 @@ export default async function caseHandler(
         // ==========================================
 
         try {
+            // Wrapper automatique pour forcer le reply (quoted: mek) si non spécifié
+            const originalSendMessage = kaya.sendMessage.bind(kaya);
+            kaya.sendMessage = async (jid, content, options = {}) => {
+                if (!options.quoted) {
+                    options.quoted = mek;
+                }
+                return originalSendMessage(jid, content, options);
+            };
 
             if (
                 typeof cmd.execute ===
