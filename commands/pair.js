@@ -1,6 +1,7 @@
 //pair.js
 import { getBotName, sendWithBotImage } from '../setting/botAssets.js';
 import { boxMessage, errorBox, successBox, usageBox } from '../setting/theme.js';
+import { getString } from '../setting/language.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -29,11 +30,12 @@ export default {
   async execute(kaya, mek, from, args, prefix) {
     try {
       const sender = mek.sender;
+      const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
       
       if (!fs.existsSync(PAIRING_FOLDER)) fs.mkdirSync(PAIRING_FOLDER, { recursive: true });
 
       if (!args[0]) {
-        const caption = boxMessage('pairing help', `• \`${prefix}pair 243xxxxxxxxx\``, '🔗');
+        const caption = boxMessage(getString(ownerId, 'pairMenuTitle'), `• \`${prefix}pair 243xxxxxxxxx\``, '🔗');
 
         return await sendWithBotImage(kaya, from, sender, { 
             caption: caption
@@ -46,12 +48,12 @@ export default {
       // 🔍 NUMBER FORMAT CHECK (Detects '+', letters, or invalid length)
       if (rawInput.includes('+') || /[^0-9]/.test(rawInput) || targetNumber.length < 8 || targetNumber.length > 15) {
         const warningContent = 
-          `• ᴅᴏ **ɴᴏᴛ** ɪɴᴄʟᴜᴅᴇ \`+\`.\n` +
-          `• ᴇɴᴛᴇʀ ᴏɴʟʏ ᴅɪɢɪᴛs.\n\n` +
-          `• *ᴇxᴀᴍᴘʟᴇ :*\n` +
+          `• ${getString(ownerId, 'pairRulePlus')}\n` +
+          `• ${getString(ownerId, 'pairRuleDigits')}\n\n` +
+          `• *${getString(ownerId, 'pairExampleLabel')} :*\n` +
           `  \`${prefix}pair 243999999999\``;
 
-        const caption = boxMessage('invalid number', warningContent, '⚠️');
+        const caption = boxMessage(getString(ownerId, 'pairInvalidTitle'), warningContent, '⚠️');
 
         return await sendWithBotImage(kaya, from, sender, { 
             caption: caption
@@ -66,8 +68,9 @@ export default {
           const lastTime = JSON.parse(fs.readFileSync(COOLDOWN_FILE, 'utf-8')).timestamp;
           if (Date.now() - lastTime < COOLDOWN_MS) {
               const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - lastTime)) / 1000);
+              const busyMsg = getString(ownerId, 'pairServerBusyMsg').replace('{remaining}', remaining);
               return await kaya.sendMessage(from, { 
-                  text: boxMessage('server busy', `ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ *${remaining} sᴇᴄᴏɴᴅs* ʙᴇғᴏʀᴇ ʀᴇᴛʀʏɪɴɢ.`, '⚠️') 
+                  text: boxMessage(getString(ownerId, 'pairServerBusyTitle'), busyMsg, '⚠️') 
               }, { quoted: mek });
           }
         } catch (e) {}
@@ -76,7 +79,7 @@ export default {
       // 2. LOCK CHECK (If another bot is already processing this number)
       if (fs.existsSync(lockFile)) {
         return await kaya.sendMessage(from, { 
-            text: boxMessage('busy', 'ᴀɴᴏᴛʜᴇʀ ʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ gᴇɴᴇʀᴀᴛɪɴɢ ᴀ cᴏᴅᴇ.', '⚠️') 
+            text: boxMessage(getString(ownerId, 'pairBusyTitle'), getString(ownerId, 'pairBusyMsg'), '⚠️') 
         }, { quoted: mek });
       }
 
@@ -93,7 +96,7 @@ export default {
       // 4. Request creation
       fs.writeFileSync(requestFile, JSON.stringify({ jid: targetNumber + "@s.whatsapp.net", name: getBotName(sender) }));
 
-      await kaya.sendMessage(from, { text: `⏳ *ɢᴇɴᴇʀᴀᴛɪɴɢ ᴘᴀɪʀɪɴɢ ᴄᴏᴅᴇ...*` }, { quoted: mek });
+      await kaya.sendMessage(from, { text: `⏳ *${getString(ownerId, 'pairGenerating')}*` }, { quoted: mek });
 
       let code = null;
       for (let i = 0; i < 12; i++) {
@@ -115,18 +118,19 @@ export default {
       if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
 
       if (code) {
-        const successText = `🔑 *ᴄᴏᴅᴇ :* \`${code}\``;
+        const successText = `${getString(ownerId, 'pairCodeLabel')} : \`${code}\``;
         await kaya.sendMessage(from, { 
             text: successBox(successText) 
         }, { quoted: mek });
       } else {
         await kaya.sendMessage(from, { 
-            text: boxMessage('timeout', 'ᴘᴀɪʀɪɴɢ ᴄᴏᴅᴇ gᴇɴᴇʀᴀᴛɪᴏɴ ᴛɪᴍᴇᴅ ᴏᴜᴛ.', '❌') 
+            text: boxMessage(getString(ownerId, 'pairTimeoutTitle'), getString(ownerId, 'pairTimeoutMsg'), '❌') 
         }, { quoted: mek });
       }
 
     } catch (err) {
       console.error('❌ Pairing Error:', err);
+      const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
       // Cleanup on error
       const targetNumber = args[0]?.replace(/[^0-9]/g, '');
       if (targetNumber) {
@@ -135,7 +139,7 @@ export default {
       }
       
       await kaya.sendMessage(from, { 
-          text: errorBox(`ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ ᴅᴜʀɪɴɢ ᴘᴀɪʀɪɴɢ : ${err.message}`) 
+          text: errorBox(`${getString(ownerId, 'pairError')} : ${err.message}`) 
       }, { quoted: mek });
     }
   }

@@ -17,8 +17,8 @@ export default {
 
     async execute(kaya, mek, from, args, prefix) {
         try {
-            const ownerId = kaya.user.id.split(':')[0];
-            const currentLang = getSetting(ownerId, 'botLanguage', 'fr');
+            const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0] : '';
+            const currentLang = getSetting(ownerId, 'botLanguage', 'en');
             const newLang = args[0]?.toLowerCase();
 
             // Menu si aucun argument n'est fourni
@@ -26,7 +26,14 @@ export default {
                 const menuText = 
                     `${getString(ownerId, 'currentLang')} \`${currentLang.toUpperCase()}\`\n\n` +
                     `• \`${prefix}lang fr\` (Français)\n` +
-                    `• \`${prefix}lang en\` (English)`;
+                    `• \`${prefix}lang en\` (English)\n` +
+                    `• \`${prefix}lang wo\` (Wolof - Sénégal)\n` +
+                    `• \`${prefix}lang ee\` (Ewe - Togo)\n` +
+                    `• \`${prefix}lang ln\` (Lingala - RDC)\n` +
+                    `• \`${prefix}lang sw\` (Swahili - Kenya/Tanzanie)\n` +
+                    `• \`${prefix}lang zu\` (Zulu - Afrique du Sud)\n` +
+                    `• \`${prefix}lang ht\` (Créole Haïtien - Haïti)\n` +
+                    `• \`${prefix}lang hi\` (Hindi - Inde)`;
 
                 return await kaya.sendMessage(
                     from, 
