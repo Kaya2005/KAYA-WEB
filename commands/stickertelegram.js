@@ -43,7 +43,6 @@ export default {
             let customPackName = '';
             let url = '';
 
-            // Si au moins 2 arguments sont fournis (ex: .tg naya https://t.me/...)
             if (args.length >= 2) {
                 url = args[args.length - 1];
                 customPackName = args.slice(0, args.length - 1).join(' ');
@@ -57,7 +56,6 @@ export default {
             }
 
             const packName = url.split('/').pop();
-
             const botToken = '8573048627:AAFDdZftcCTJCru2HxbsowjdpfjrJzE2aMw';
 
             const res = await fetch(
@@ -85,6 +83,10 @@ export default {
             let success = 0;
 
             for (let i = 0; i < stickers.length; i++) {
+                let input = null;
+                let output = null;
+                let exifFile = null;
+
                 try {
                     const sticker = stickers[i];
 
@@ -96,13 +98,12 @@ export default {
                     if (!fileJson.ok) continue;
 
                     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileJson.result.file_path}`;
-
                     const buffer = Buffer.from(
                         await (await fetch(fileUrl)).arrayBuffer()
                     );
 
-                    const input = `./tmp_${Date.now()}_${i}`;
-                    const output = `./out_${Date.now()}_${i}.webp`;
+                    input = `./tmp_${Date.now()}_${i}`;
+                    output = `./out_${Date.now()}_${i}.webp`;
 
                     fs.writeFileSync(input, buffer);
 
@@ -113,8 +114,7 @@ export default {
 
                     await convertMedia(input, output, isAnimated);
 
-                    // Utilisation du nom personnalisé pour le packname et l'author
-                    const exifFile = await writeExif(
+                    exifFile = await writeExif(
                         {
                             data: fs.readFileSync(output),
                             mimetype: 'image/webp'
@@ -131,16 +131,15 @@ export default {
                     });
 
                     success++;
-
-                    try {
-                        if (fs.existsSync(input)) fs.unlinkSync(input);
-                        if (fs.existsSync(output)) fs.unlinkSync(output);
-                        if (fs.existsSync(exifFile)) fs.unlinkSync(exifFile);
-                    } catch {}
-
                     await delay(700);
+
                 } catch (e) {
                     console.error("Erreur sticker:", e);
+                } finally {
+                    // GARANTIE DE NETTOYAGE : S'exécute quoi qu'il arrive (succès ou erreur)
+                    try { if (input && fs.existsSync(input)) fs.unlinkSync(input); } catch {}
+                    try { if (output && fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+                    try { if (exifFile && fs.existsSync(exifFile)) fs.unlinkSync(exifFile); } catch {}
                 }
             }
 
