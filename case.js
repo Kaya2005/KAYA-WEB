@@ -25,6 +25,10 @@ import {
     getSetting
 } from "./setting.js";
 
+import {
+    getString
+} from "./setting/language.js"; // 🌐 Import de la gestion des langues
+
 // ==========================================
 // ANTI DELETE
 // ==========================================
@@ -982,7 +986,7 @@ export default async function caseHandler(
                 from,
                 {
                     text:
-                        "Owner or Sudo only."
+                        getString(ownerId, 'ownerOnly')
                 },
                 {
                     quoted: mek
@@ -1003,7 +1007,7 @@ export default async function caseHandler(
                 from,
                 {
                     text:
-                        "Group only."
+                        getString(ownerId, 'groupOnly')
                 },
                 {
                     quoted: mek
@@ -1024,7 +1028,7 @@ export default async function caseHandler(
                 from,
                 {
                     text:
-                        "Admin only."
+                        getString(ownerId, 'adminOnly')
                 },
                 {
                     quoted: mek
@@ -1125,7 +1129,7 @@ export default async function caseHandler(
                     from,
                     {
                         text:
-                            "Bot must be admin."
+                            getString(ownerId, 'botAdmin')
                     },
                     {
                         quoted: mek
@@ -1209,7 +1213,7 @@ export default async function caseHandler(
                     from,
                     {
                         text:
-                            `❌ Une erreur critique est survenue lors de l'exécution de la commande *${command}*.`
+                            getString(ownerId, 'errorOccurred')
                     },
                     {
                         quoted: mek
