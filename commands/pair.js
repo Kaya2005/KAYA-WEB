@@ -5,7 +5,18 @@ import fs from 'fs';
 import path from 'path';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-const PAIRING_FOLDER = './richstore/pairing';
+
+const BASE_DIR = fs.existsSync("/home/container/Kaya-MD")
+    ? "/home/container/Kaya-MD"
+    : process.cwd();
+
+const PAIRING_FOLDER = path.join(
+    BASE_DIR,
+    "data",
+    "richstore",
+    "pairing"
+);
+
 const COOLDOWN_FILE = path.join(PAIRING_FOLDER, 'cooldown.json');
 const COOLDOWN_MS = 30000; // 30 seconds
 
@@ -51,19 +62,21 @@ export default {
 
       // 1. GLOBAL COOLDOWN CHECK (30 seconds)
       if (fs.existsSync(COOLDOWN_FILE)) {
-        const lastTime = JSON.parse(fs.readFileSync(COOLDOWN_FILE, 'utf-8')).timestamp;
-        if (Date.now() - lastTime < COOLDOWN_MS) {
-            const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - lastTime)) / 1000);
-            return await kaya.sendMessage(from, { 
-                text: boxMessage('server busy', `ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ *${remaining} sᴇᴄᴏɴᴅs* ʙᴇғᴏʀᴇ ʀᴇᴛʀʏɪɴɢ.`, '⚠️') 
-            }, { quoted: mek });
-        }
+        try {
+          const lastTime = JSON.parse(fs.readFileSync(COOLDOWN_FILE, 'utf-8')).timestamp;
+          if (Date.now() - lastTime < COOLDOWN_MS) {
+              const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - lastTime)) / 1000);
+              return await kaya.sendMessage(from, { 
+                  text: boxMessage('server busy', `ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ *${remaining} sᴇᴄᴏɴᴅs* ʙᴇғᴏʀᴇ ʀᴇᴛʀʏɪɴɢ.`, '⚠️') 
+              }, { quoted: mek });
+          }
+        } catch (e) {}
       }
 
       // 2. LOCK CHECK (If another bot is already processing this number)
       if (fs.existsSync(lockFile)) {
         return await kaya.sendMessage(from, { 
-            text: boxMessage('busy', 'ᴀɴᴏᴛʜᴇʀ ʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ɢᴇɴᴇʀᴀᴛɪɴɢ ᴀ ᴄᴏᴅᴇ.', '⚠️') 
+            text: boxMessage('busy', 'ᴀɴᴏᴛʜᴇʀ ʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ gᴇɴᴇʀᴀᴛɪɴɢ ᴀ cᴏᴅᴇ.', '⚠️') 
         }, { quoted: mek });
       }
 
@@ -108,7 +121,7 @@ export default {
         }, { quoted: mek });
       } else {
         await kaya.sendMessage(from, { 
-            text: boxMessage('timeout', 'ᴘᴀɪʀɪɴɢ ᴄᴏᴅᴇ ɢᴇɴᴇʀᴀᴛɪᴏɴ ᴛɪᴍᴇᴅ ᴏᴜᴛ.', '❌') 
+            text: boxMessage('timeout', 'ᴘᴀɪʀɪɴɢ ᴄᴏᴅᴇ gᴇɴᴇʀᴀᴛɪᴏɴ ᴛɪᴍᴇᴅ ᴏᴜᴛ.', '❌') 
         }, { quoted: mek });
       }
 
