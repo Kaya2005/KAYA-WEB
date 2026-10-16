@@ -1565,7 +1565,7 @@ const translations = {
         ee: "App",
         ln: "Application",
         sw: "Programu",
-        zu:Uhlelo",
+        zu:"Uhlelo",
         ht: "Aplikasyon",
         hi: "ऐप"
     },
