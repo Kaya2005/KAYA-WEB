@@ -47,6 +47,7 @@ export default {
 
             // Changement de la langue
             if (setLanguage(ownerId, newLang)) {
+                // getString ira directement chercher la clé dans la nouvelle langue mise à jour
                 const msg = `${getString(ownerId, 'langSuccess')} *${newLang.toUpperCase()}*`;
                 return await kaya.sendMessage(
                     from, 
