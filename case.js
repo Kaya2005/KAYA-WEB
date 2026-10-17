@@ -1163,13 +1163,13 @@ export default async function caseHandler(
         // ==========================================
 
         try {
-            // Wrapper automatique pour forcer le reply (quoted: mek) si non spécifié
-            const originalSendMessage = kaya.sendMessage.bind(kaya);
-            kaya.sendMessage = async (jid, content, options = {}) => {
-                if (!options.quoted) {
+            // Client proxy local pour forcer le reply (quoted: mek) uniquement lors des commandes
+            const clientForCmd = Object.create(kaya);
+            clientForCmd.sendMessage = async (jid, content, options = {}) => {
+                if (options.quoted === undefined) {
                     options.quoted = mek;
                 }
-                return originalSendMessage(jid, content, options);
+                return kaya.sendMessage(jid, content, options);
             };
 
             if (
@@ -1178,7 +1178,7 @@ export default async function caseHandler(
             ) {
 
                 await cmd.execute(
-                    kaya,
+                    clientForCmd,
                     mek,
                     from,
                     args,
@@ -1191,7 +1191,7 @@ export default async function caseHandler(
             ) {
 
                 await cmd.run(
-                    kaya,
+                    clientForCmd,
                     mek,
                     args,
                     prefix
