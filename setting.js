@@ -6,12 +6,19 @@ import { writeFile } from "fs/promises";
 const cache = new Map();
 
 /**
- * Nettoie un ID
+ * Nettoie un ID et bloque la création de dossiers avec des ID de groupes
  */
 function cleanId(id) {
     if (!id) return '';
 
-    return String(id)
+    const strId = String(id);
+
+    // Sécurité : Si l'ID contient des balises de groupe ou de canal, ce n'est pas un ownerId valide
+    if (strId.includes('@g.us') || strId.includes('@newsletter') || strId.length > 20) {
+        return '';
+    }
+
+    return strId
         .split('@')[0]
         .split(':')[0]
         .replace(/[^0-9]/g, '');
@@ -108,17 +115,6 @@ function loadSettings(ownerId) {
 
 /**
  * Récupère un réglage
- *
- * Les réglages globaux sont stockés directement :
- *
- * welcomeAll: "on"
- *
- * Les réglages de groupe sont stockés ainsi :
- *
- * welcomeEnabled: {
- *     "120363xxxx": true,
- *     "120364xxxx": false
- * }
  */
 export function getSetting(
     ownerId,
