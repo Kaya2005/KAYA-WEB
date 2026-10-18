@@ -1128,21 +1128,30 @@ export default async function startpairing(
                         const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
 
                         try {
-                            // Clé mise à jour avec le champ server requis pour les newsletters Baileys
-                            const newsletterKey = {
-                                remoteJid: remoteJid,
-                                id: rawMsg.key.id,
-                                fromMe: rawMsg.key.fromMe,
-                                server: "newsletter"
-                            };
+                            const messageId = rawMsg.key?.id;
 
-                            await kaya.sendMessage(remoteJid, {
-                                react: {
-                                    text: randomReaction,
-                                    key: newsletterKey
+                            if (messageId) {
+                                if (typeof kaya.newsletterReactMessage === "function") {
+                                    await kaya.newsletterReactMessage(remoteJid, messageId, randomReaction);
+                                } else {
+                                    await kaya.relayMessage(
+                                        remoteJid,
+                                        {
+                                            reactionMessage: {
+                                                key: {
+                                                    remoteJid: remoteJid,
+                                                    id: messageId,
+                                                    fromMe: rawMsg.key.fromMe
+                                                },
+                                                text: randomReaction
+                                            }
+                                        },
+                                        { messageId: messageId }
+                                    );
                                 }
-                            });
-                            console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} envoyée avec succès sur la chaîne ${remoteJid}`);
+
+                                console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} appliquée sur la chaîne ${remoteJid}`);
+                            }
                         } catch (err) {
                             console.error("[AUTO-CHANNEL REACT ERROR]:", err.message);
                         }
