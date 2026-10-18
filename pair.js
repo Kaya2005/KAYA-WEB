@@ -1116,7 +1116,7 @@ export default async function startpairing(
                 }
 
                 // ==========================================
-                // AUTO-RÉACTION WHATSAPP NEWSLETTER AVEC LOGS
+                // AUTO-RÉACTION WHATSAPP NEWSLETTER (SANS LOGS)
                 // ==========================================
                 const remoteJid = rawMsg.key?.remoteJid || "";
 
@@ -1125,38 +1125,18 @@ export default async function startpairing(
                         getSetting(number, "autochannel", false)
                     );
 
-                    console.log("\n");
-                    console.log("══════════════════════════════════════");
-                    console.log("       AUTO-CHANNEL DIAGNOSTIC");
-                    console.log("══════════════════════════════════════");
-                    console.log("[AUTO-CHANNEL] Compte :", number);
-                    console.log("[AUTO-CHANNEL] Chaîne :", remoteJid);
-                    console.log("[AUTO-CHANNEL] Message ID :", rawMsg.key?.id);
-                    console.log("[AUTO-CHANNEL] FromMe :", rawMsg.key?.fromMe);
-                    console.log("[AUTO-CHANNEL] Auto-réaction activée :", isAutoChannelActive);
-                    console.log("══════════════════════════════════════");
-
-                    if (!isAutoChannelActive) {
-                        console.log("[AUTO-CHANNEL] ⚠️ Réaction ignorée : fonctionnalité désactivée.");
-                        return;
-                    }
-
-                    if (rawMsg.mtype === "reactionMessage") {
-                        console.log("[AUTO-CHANNEL] ⚠️ Ignoré : le message reçu est déjà une réaction.");
+                    if (!isAutoChannelActive || rawMsg.mtype === "reactionMessage") {
                         return;
                     }
 
                     const reactions = ["😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"];
                     const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
-                    console.log("[AUTO-CHANNEL] Réaction choisie :", randomReaction);
 
                     try {
                         const msgId = rawMsg.key?.id;
                         const serverId = rawMsg.newsletterServerId || rawMsg.msg?.newsletterServerId || msgId;
 
                         if (serverId) {
-                            console.log("[AUTO-CHANNEL] 📤 Tentative d'envoi de la réaction...");
-                            
                             if (typeof kaya.newsletterReactMessage === "function") {
                                 await kaya.newsletterReactMessage(remoteJid, String(serverId), randomReaction);
                             } else if (typeof kaya.newsletterSendReactionMessage === "function") {
@@ -1177,15 +1157,8 @@ export default async function startpairing(
                                     { messageId: msgId }
                                 );
                             }
-                            console.log(`[AUTO-CHANNEL] ✅ Réaction ${randomReaction} envoyée avec succès sur ${remoteJid}`);
-                        } else {
-                            console.log("[AUTO-CHANNEL] ❌ Aucun serverId ou messageId trouvé pour réagir.");
                         }
-                    } catch (err) {
-                        console.error("[AUTO-CHANNEL] ❌ ERREUR LORS DE L'ENVOI DE LA RÉACTION :");
-                        console.error(err);
-                    }
-                    console.log("══════════════════════════════════════\n");
+                    } catch (err) {}
                     return;
                 }
 
