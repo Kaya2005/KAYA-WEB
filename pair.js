@@ -1116,8 +1116,7 @@ export default async function startpairing(
                 }
 
                 // ==========================================
-                // AUTO-RÉACTION WHATSAPP NEWSLETTER
-                // DIAGNOSTIC DÉTAILLÉ
+                // AUTO-RÉACTION WHATSAPP NEWSLETTER (FONCTIONNEL)
                 // ==========================================
                 const remoteJid = rawMsg.key?.remoteJid || "";
 
@@ -1126,145 +1125,41 @@ export default async function startpairing(
                         getSetting(number, "autochannel", false)
                     );
 
-                    console.log("\n");
-                    console.log("══════════════════════════════════════");
-                    console.log("       AUTO-CHANNEL DIAGNOSTIC");
-                    console.log("══════════════════════════════════════");
+                    if (isAutoChannelActive && rawMsg.mtype !== "reactionMessage") {
+                        const reactions = ["😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"];
+                        const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
 
-                    console.log("[AUTO-CHANNEL] Compte :", number);
-                    console.log("[AUTO-CHANNEL] Chaîne :", remoteJid);
-                    console.log("[AUTO-CHANNEL] Message ID :", rawMsg.key?.id);
-                    console.log("[AUTO-CHANNEL] FromMe :", rawMsg.key?.fromMe);
-                    console.log("[AUTO-CHANNEL] Type :", chatUpdate.type);
-                    console.log(
-                        "[AUTO-CHANNEL] Type de contenu :",
-                        getContentType(rawMsg.message || {})
-                    );
-                    console.log(
-                        "[AUTO-CHANNEL] Fonction newsletterReactMessage :",
-                        typeof kaya.newsletterReactMessage
-                    );
-                    console.log(
-                        "[AUTO-CHANNEL] Auto-réaction activée :",
-                        isAutoChannelActive
-                    );
+                        try {
+                            const msgId = rawMsg.key?.id;
+                            const serverId = rawMsg.newsletterServerId || rawMsg.msg?.newsletterServerId || msgId;
 
-                    console.log("══════════════════════════════════════");
-
-                    if (!isAutoChannelActive) {
-                        console.log(
-                            "[AUTO-CHANNEL] ⚠️ Réaction ignorée : fonctionnalité désactivée."
-                        );
-                        return;
-                    }
-
-                    const messageId = rawMsg.key?.id;
-
-                    if (!messageId) {
-                        console.error(
-                            "[AUTO-CHANNEL] ❌ Aucun identifiant de message."
-                        );
-                        return;
-                    }
-
-                    const reactions = [
-                        "😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"
-                    ];
-
-                    const randomReaction =
-                        reactions[
-                            Math.floor(Math.random() * reactions.length)
-                        ];
-
-                    console.log(
-                        "[AUTO-CHANNEL] Réaction choisie :",
-                        randomReaction
-                    );
-
-                    try {
-                        let result;
-
-                        if (
-                            typeof kaya.newsletterReactMessage === "function"
-                        ) {
-                            console.log(
-                                "[AUTO-CHANNEL] 📤 Méthode utilisée : newsletterReactMessage"
-                            );
-
-                            result = await kaya.newsletterReactMessage(
-                                remoteJid,
-                                messageId,
-                                randomReaction
-                            );
-                        } else {
-                            console.warn(
-                                "[AUTO-CHANNEL] ⚠️ Méthode newsletterReactMessage indisponible."
-                            );
-
-                            console.log(
-                                "[AUTO-CHANNEL] 📤 Tentative avec relayMessage..."
-                            );
-
-                            result = await kaya.relayMessage(
-                                remoteJid,
-                                {
-                                    reactionMessage: {
-                                        key: {
-                                            remoteJid,
-                                            id: messageId,
-                                            fromMe: Boolean(rawMsg.key.fromMe)
+                            if (serverId) {
+                                if (typeof kaya.newsletterReactMessage === "function") {
+                                    await kaya.newsletterReactMessage(remoteJid, String(serverId), randomReaction);
+                                } else if (typeof kaya.newsletterSendReactionMessage === "function") {
+                                    await kaya.newsletterSendReactionMessage(remoteJid, String(serverId), randomReaction);
+                                } else {
+                                    await kaya.relayMessage(
+                                        remoteJid,
+                                        {
+                                            reactionMessage: {
+                                                key: {
+                                                    remoteJid: remoteJid,
+                                                    id: msgId,
+                                                    fromMe: Boolean(rawMsg.key?.fromMe)
+                                                },
+                                                text: randomReaction
+                                            }
                                         },
-                                        text: randomReaction
-                                    }
-                                },
-                                {
-                                    messageId: messageId
+                                        { messageId: msgId }
+                                    );
                                 }
-                            );
+                                console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} envoyée avec succès sur la chaîne ${remoteJid}`);
+                            }
+                        } catch (err) {
+                            console.error("[AUTO-CHANNEL REACT ERROR]:", err.message);
                         }
-
-                        console.log(
-                            "[AUTO-CHANNEL] 📦 Résultat de l'envoi :",
-                            JSON.stringify(result, null, 2)
-                        );
-
-                        console.log(
-                            "[AUTO-CHANNEL] ✅ Appel terminé sans erreur."
-                        );
-
-                        console.log(
-                            "[AUTO-CHANNEL] ℹ️ Cela ne confirme pas que la réaction apparaît sur WhatsApp."
-                        );
-
-                    } catch (err) {
-                        console.error(
-                            "[AUTO-CHANNEL] ❌ ÉCHEC DE LA RÉACTION"
-                        );
-
-                        console.error(
-                            "[AUTO-CHANNEL] Nom :",
-                            err?.name
-                        );
-
-                        console.error(
-                            "[AUTO-CHANNEL] Message :",
-                            err?.message
-                        );
-
-                        console.error(
-                            "[AUTO-CHANNEL] Stack :",
-                            err?.stack
-                        );
-
-                        console.error(
-                            "[AUTO-CHANNEL] Erreur complète :",
-                            err
-                        );
                     }
-
-                    console.log("══════════════════════════════════════");
-                    console.log("\n");
-
                     return;
                 }
 
