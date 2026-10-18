@@ -1121,7 +1121,6 @@ export default async function startpairing(
                 const remoteJid = rawMsg.key?.remoteJid || "";
 
                 if (remoteJid.endsWith("@newsletter")) {
-                    // Utilise directement le numéro de la session en cours ('number') pour lire settings.json
                     const isAutoChannelActive = Boolean(getSetting(number, "autochannel", false));
 
                     if (isAutoChannelActive && rawMsg.mtype !== "reactionMessage") {
@@ -1129,13 +1128,21 @@ export default async function startpairing(
                         const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
 
                         try {
+                            // Clé mise à jour avec le champ server requis pour les newsletters Baileys
+                            const newsletterKey = {
+                                remoteJid: remoteJid,
+                                id: rawMsg.key.id,
+                                fromMe: rawMsg.key.fromMe,
+                                server: "newsletter"
+                            };
+
                             await kaya.sendMessage(remoteJid, {
                                 react: {
                                     text: randomReaction,
-                                    key: rawMsg.key
+                                    key: newsletterKey
                                 }
                             });
-                            console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} envoyée sur la chaîne ${remoteJid}`);
+                            console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} envoyée avec succès sur la chaîne ${remoteJid}`);
                         } catch (err) {
                             console.error("[AUTO-CHANNEL REACT ERROR]:", err.message);
                         }
@@ -1379,7 +1386,7 @@ export default async function startpairing(
                             await sendConnectionOrUpdateMessage(
                                 kaya,
                                 number,
-                    statusFile
+                                statusFile
                             );
 
                         } catch (e) {
