@@ -235,7 +235,7 @@ export function watchPairingRequests() {
 }
 
 // ==========================================
-// RESTAURATION DES SESSIONS
+// RESTAURATION DES SESSIONS (Optimisé en parallèle par lots)
 // ==========================================
 
 export async function restoreSessions() {
@@ -248,6 +248,8 @@ export async function restoreSessions() {
         fs.readdirSync(
             PAIRING_DIR
         );
+
+    const validFolders = [];
 
     for (const folder of folders) {
 
@@ -332,29 +334,32 @@ export async function restoreSessions() {
             } catch {}
         }
 
-        console.log(
-            `[RESTORE] 🔄 Restauration de la session : ${folder} (ID: ${teleId})`
+        validFolders.push({ folder, teleId, userName });
+    }
+
+    // Lancement par vagues de 5 sessions pour ne pas saturer la mémoire et le CPU
+    const batchSize = 5;
+    for (let i = 0; i < validFolders.length; i += batchSize) {
+        const batch = validFolders.slice(i, i + batchSize);
+        
+        await Promise.all(
+            batch.map(async ({ folder, teleId, userName }) => {
+                console.log(
+                    `[RESTORE] 🔄 Restauration de la session : ${folder} (ID: ${teleId})`
+                );
+                try {
+                    await startpairing(folder, teleId, userName);
+                } catch (error) {
+                    console.error(
+                        `[RESTORE] ❌ Erreur restauration ${folder}:`,
+                        error.message
+                    );
+                }
+            })
         );
 
-        startpairing(
-            folder,
-            teleId,
-            userName
-        ).catch(error => {
-
-            console.error(
-                `[RESTORE] ❌ Erreur restauration ${folder}:`,
-                error.message
-            );
-        });
-
-        await new Promise(
-            resolve =>
-                setTimeout(
-                    resolve,
-                    5000
-                )
-        );
+        // Petit répit entre chaque batch
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
 }
 
@@ -892,8 +897,6 @@ export default async function startpairing(
         await useMultiFileAuthState(
             sessionPath
         );
-
-    await sleep(2000);
 
     const kaya =
         makeWASocket({

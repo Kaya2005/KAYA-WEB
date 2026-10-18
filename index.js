@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 
@@ -66,7 +67,7 @@ app.use(
 );
 
 // ==========================================
-// 🔗 ROUTE API PAIRAGE
+// 🔗 ROUTE API PAIRAGE (Optimisée asynchrone)
 // ==========================================
 
 app.post(
@@ -135,14 +136,14 @@ app.post(
                 );
 
             if (fs.existsSync(pairingFile)) {
-                fs.unlinkSync(pairingFile);
+                await fsPromises.unlink(pairingFile).catch(() => {});
             }
 
             // ==========================================
             // DEMANDE DE PAIRAGE
             // ==========================================
 
-            fs.writeFileSync(
+            await fsPromises.writeFile(
                 requestPath,
                 JSON.stringify({
                     jid:
@@ -155,11 +156,10 @@ app.post(
             );
 
             // ==========================================
-            // ATTENTE DU CODE
+            // ATTENTE DU CODE (Asynchrone non bloquant)
             // ==========================================
 
             let attempts = 0;
-
             let codeData = null;
 
             while (
@@ -173,23 +173,11 @@ app.post(
                 ) {
 
                     try {
-
-                        codeData =
-                            JSON.parse(
-                                fs.readFileSync(
-                                    pairingFile,
-                                    'utf-8'
-                                )
-                            );
-
+                        const fileContent = await fsPromises.readFile(pairingFile, 'utf-8');
+                        codeData = JSON.parse(fileContent);
                         break;
-
                     } catch (e) {
-
-                        console.error(
-                            'Erreur lecture fichier pairing:',
-                            e.message
-                        );
+                        // Fichier potentiellement en cours d'écriture, on réessaie au tour suivant
                     }
                 }
 
@@ -252,25 +240,25 @@ app.post(
 
 app.get(
     '/api/listpair',
-    (req, res) => {
+    async (req, res) => {
 
         try {
+            if (!fs.existsSync(PAIRING_DIR)) {
+                return res.json({ total: 0 });
+            }
 
             const files =
-                fs
-                    .readdirSync(
-                        PAIRING_DIR
-                    )
-                    .filter(
-                        file =>
-                            file.startsWith(
-                                'pairing_'
-                            )
-                    );
+                await fsPromises.readdir(
+                    PAIRING_DIR
+                );
+
+            const filteredFiles = files.filter(
+                file => file.startsWith('pairing_')
+            );
 
             res.json({
                 total:
-                    files.length
+                    filteredFiles.length
             });
 
         } catch (error) {
@@ -293,14 +281,14 @@ app.get(
 
 app.get(
     '/api/online-count',
-    (req, res) => {
+    async (req, res) => {
 
         try {
             if (!fs.existsSync(PAIRING_DIR)) {
                 return res.json({ success: true, totalConnected: 0 });
             }
 
-            const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+            const entries = await fsPromises.readdir(PAIRING_DIR, { withFileTypes: true });
 
             let sessionCount = 0;
             for (const entry of entries) {
@@ -331,13 +319,13 @@ app.get(
 // 📋 LISTE DES NUMÉROS CONNECTÉS
 // ==========================================
 
-app.get('/api/connected-list', (req, res) => {
+app.get('/api/connected-list', async (req, res) => {
     try {
         if (!fs.existsSync(PAIRING_DIR)) {
             return res.json({ success: true, numbers: [] });
         }
 
-        const entries = fs.readdirSync(PAIRING_DIR, { withFileTypes: true });
+        const entries = await fsPromises.readdir(PAIRING_DIR, { withFileTypes: true });
         const numbers = [];
 
         for (const entry of entries) {
@@ -409,7 +397,7 @@ async function launchBot() {
         resolve =>
             setTimeout(
                 resolve,
-                5000
+                2000
             )
     );
 
