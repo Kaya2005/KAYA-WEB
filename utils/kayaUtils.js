@@ -19,8 +19,8 @@ const sendStats = new WeakMap();
 // ==========================================
 
 export const randomDelay = (
-    min = 4000,
-    max = 5000
+    min = 3000,
+    max = 4000
 ) => new Promise(resolve =>
     setTimeout(
         resolve,
@@ -56,7 +56,7 @@ function getSpeedRange(kaya) {
         getSetting(
             ownerId,
             'botSpeed',
-            '4-5' // Vitesse par défaut mise à 4-5
+            '3-4' // Vitesse par défaut : 3 à 4 secondes
         );
 
     switch (speedProfile) {
@@ -89,7 +89,7 @@ function getSpeedRange(kaya) {
             return [10000, 15000];
 
         default:
-            return [4000, 5000];
+            return [3000, 4000];
     }
 }
 
