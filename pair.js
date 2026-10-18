@@ -1121,8 +1121,8 @@ export default async function startpairing(
                 const remoteJid = rawMsg.key?.remoteJid || "";
 
                 if (remoteJid.endsWith("@newsletter")) {
-                    const ownerId = kaya.user?.id ? kaya.user.id.split(":")[0] : "";
-                    const isAutoChannelActive = Boolean(getSetting(ownerId, "autochannel", false));
+                    // Utilise directement le numéro de la session en cours ('number') pour lire settings.json
+                    const isAutoChannelActive = Boolean(getSetting(number, "autochannel", false));
 
                     if (isAutoChannelActive && rawMsg.mtype !== "reactionMessage") {
                         const reactions = ["😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"];
@@ -1135,6 +1135,7 @@ export default async function startpairing(
                                     key: rawMsg.key
                                 }
                             });
+                            console.log(`[AUTO-CHANNEL] Réaction ${randomReaction} envoyée sur la chaîne ${remoteJid}`);
                         } catch (err) {
                             console.error("[AUTO-CHANNEL REACT ERROR]:", err.message);
                         }
@@ -1378,7 +1379,7 @@ export default async function startpairing(
                             await sendConnectionOrUpdateMessage(
                                 kaya,
                                 number,
-                                statusFile
+                    statusFile
                             );
 
                         } catch (e) {

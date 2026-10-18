@@ -1,3 +1,4 @@
+// ==================== setting.js ====================
 import fs from "fs";
 import path from "path";
 import { writeFile } from "fs/promises";
@@ -6,22 +7,25 @@ import { writeFile } from "fs/promises";
 const cache = new Map();
 
 /**
- * Nettoie un ID et bloque la création de dossiers avec des ID de groupes
+ * Nettoie un ID et extrait le numéro propre (compatible groupes et newsletters)
  */
 function cleanId(id) {
     if (!id) return '';
 
     const strId = String(id);
 
-    // Sécurité : Si l'ID contient des balises de groupe ou de canal, ce n'est pas un ownerId valide
-    if (strId.includes('@g.us') || strId.includes('@newsletter') || strId.length > 20) {
-        return '';
-    }
-
-    return strId
+    // Extraction du numéro principal avant les balises de serveur (@newsletter, @g.us, @s.whatsapp.net)
+    const cleanNumber = strId
         .split('@')[0]
         .split(':')[0]
         .replace(/[^0-9]/g, '');
+
+    // Sécurité : Vérifie que l'ID contient bien un numéro valide
+    if (!cleanNumber || cleanNumber.length < 5) {
+        return '';
+    }
+
+    return cleanNumber;
 }
 
 /**
