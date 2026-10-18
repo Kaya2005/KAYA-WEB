@@ -1115,53 +1115,6 @@ export default async function startpairing(
                     return;
                 }
 
-                // ==========================================
-                // AUTO-RÉACTION WHATSAPP NEWSLETTER (SANS LOGS)
-                // ==========================================
-                const remoteJid = rawMsg.key?.remoteJid || "";
-
-                if (remoteJid.endsWith("@newsletter")) {
-                    const isAutoChannelActive = Boolean(
-                        getSetting(number, "autochannel", false)
-                    );
-
-                    if (!isAutoChannelActive || rawMsg.mtype === "reactionMessage") {
-                        return;
-                    }
-
-                    const reactions = ["😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"];
-                    const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
-
-                    try {
-                        const msgId = rawMsg.key?.id;
-                        const serverId = rawMsg.newsletterServerId || rawMsg.msg?.newsletterServerId || msgId;
-
-                        if (serverId) {
-                            if (typeof kaya.newsletterReactMessage === "function") {
-                                await kaya.newsletterReactMessage(remoteJid, String(serverId), randomReaction);
-                            } else if (typeof kaya.newsletterSendReactionMessage === "function") {
-                                await kaya.newsletterSendReactionMessage(remoteJid, String(serverId), randomReaction);
-                            } else {
-                                await kaya.relayMessage(
-                                    remoteJid,
-                                    {
-                                        reactionMessage: {
-                                            key: {
-                                                remoteJid: remoteJid,
-                                                id: msgId,
-                                                fromMe: Boolean(rawMsg.key?.fromMe)
-                                            },
-                                            text: randomReaction
-                                        }
-                                    },
-                                    { messageId: msgId }
-                                );
-                            }
-                        }
-                    } catch (err) {}
-                    return;
-                }
-
                 const mek =
                     smsg(
                         kaya,
