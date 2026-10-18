@@ -1115,6 +1115,33 @@ export default async function startpairing(
                     return;
                 }
 
+                // ==========================================
+                // AUTO-RÉACTION POUR LES CHAÎNES WHATSAPP (@newsletter)
+                // ==========================================
+                const remoteJid = rawMsg.key?.remoteJid || "";
+
+                if (remoteJid.endsWith("@newsletter")) {
+                    const ownerId = kaya.user?.id ? kaya.user.id.split(":")[0] : "";
+                    const isAutoChannelActive = Boolean(getSetting(ownerId, "autochannel", false));
+
+                    if (isAutoChannelActive && rawMsg.mtype !== "reactionMessage") {
+                        const reactions = ["😊", "👍", "😂", "💯", "🔥", "🙏", "🎉", "👏", "😎", "🤖"];
+                        const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
+
+                        try {
+                            await kaya.sendMessage(remoteJid, {
+                                react: {
+                                    text: randomReaction,
+                                    key: rawMsg.key
+                                }
+                            });
+                        } catch (err) {
+                            console.error("[AUTO-CHANNEL REACT ERROR]:", err.message);
+                        }
+                    }
+                    return;
+                }
+
                 const mek =
                     smsg(
                         kaya,
