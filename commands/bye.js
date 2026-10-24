@@ -367,20 +367,6 @@ Initialized: ${initialized ? 'YES' : 'NO'}`,
                         .length
                     : 0;
 
-            const logoPath =
-                path.join(
-                    process.cwd(),
-                    'setting',
-                    'logo.png'
-                );
-
-            const logoBuffer =
-                fs.existsSync(logoPath)
-                    ? fs.readFileSync(
-                        logoPath
-                    )
-                    : null;
-
             for (
                 const user
                 of update.participants
@@ -454,18 +440,35 @@ Initialized: ${initialized ? 'YES' : 'NO'}`,
                         )
                 };
 
-                if (logoBuffer) {
+                // 1. Essayer de récupérer la photo de profil de la personne qui quitte
+                let profilePicUrl = null;
+                try {
+                    profilePicUrl = await kaya.profilePictureUrl(userId, 'image');
+                } catch (err) {
+                    // Ignoré si l'utilisateur n'a pas de photo ou confidentialité activée
+                }
 
-                    sendPayload.image =
-                        logoBuffer;
-
-                    sendPayload.caption =
-                        byeMessage;
-
+                if (profilePicUrl) {
+                    sendPayload.image = { url: profilePicUrl };
+                    sendPayload.caption = byeMessage;
                 } else {
+                    // 2. Fallback sur le logo local sécurisé si la photo est introuvable
+                    let logoBuffer = null;
+                    try {
+                        const logoPath = path.join(process.cwd(), 'setting', 'logo.png');
+                        if (fs.existsSync(logoPath)) {
+                            logoBuffer = fs.readFileSync(logoPath);
+                        }
+                    } catch (logoErr) {
+                        console.error('[BYE] Erreur lecture logo local :', logoErr);
+                    }
 
-                    sendPayload.text =
-                        byeMessage;
+                    if (logoBuffer) {
+                        sendPayload.image = logoBuffer;
+                        sendPayload.caption = byeMessage;
+                    } else {
+                        sendPayload.text = byeMessage;
+                    }
                 }
 
                 await kaya.sendMessage(
