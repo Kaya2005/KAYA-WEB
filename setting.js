@@ -15,6 +15,11 @@ function cleanId(id) {
 
     const strId = String(id);
 
+    // Sécurité : Empêche formellement qu'un ID de groupe devienne un dossier d'owner
+    if (strId.includes('@g.us')) {
+        return '';
+    }
+
     const cleanNumber = strId
         .split('@')[0]
         .split(':')[0]
@@ -155,7 +160,7 @@ export function getSetting(
 }
 
 /**
- * Enregistre un réglage (Optimisé avec Debounce pour éviter la saturation du disque)
+ * Enregistre un réglage (Stockage optimisé avec persistance des états désactivés)
  */
 export async function setSetting(
     ownerId,
@@ -205,9 +210,10 @@ export async function setSetting(
                 try {
                     const filePath = getSettingsPath(cleanOwnerId, true);
                     if (filePath) {
+                        // Écriture compacte sur 1 ligne pour économiser l'espace disque
                         await writeFile(
                             filePath,
-                            JSON.stringify(settings, null, 2),
+                            JSON.stringify(settings),
                             'utf8'
                         );
                     }
