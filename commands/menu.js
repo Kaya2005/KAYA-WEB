@@ -1,7 +1,8 @@
 // ==================== commands/menu.js ====================
 import fs from 'fs';
 import path from 'path';
-import { getBotName, sendWithBotImage } from '../setting/botAssets.js';
+import { getContextInfo } from '../setting/contextInfo.js';
+import { getBotName, sendWithBotImage, getLocalBotImagePath } from '../setting/botAssets.js';
 
 // Table de conversion pour transformer le texte standard en sᴍᴀʟʟ ᴄᴀᴘs stylisés
 function toSmallCaps(str) {
@@ -54,6 +55,7 @@ export default {
             const userMention = `@${userNumber}`;
             
             const botName = getBotName(mek.sender);
+            const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : userNumber;
 
             const commandsDir = path.join(process.cwd(), 'commands');
             const categories = {};
@@ -97,19 +99,40 @@ ${buildHeader({ user: userMention, prefix, totalCmds, botName })}
 ${menuList.trim()}
 `.trim();
 
-            // Définition de l'externalAdReply avec le support flexible de la miniature
+            // 🖼️ Récupération de l'image (owner ou défaut) pour l'aperçu sous n'importe quelle taille
+            let thumbnailBuffer = undefined;
+            try {
+                let imgPath = getLocalBotImagePath(ownerId);
+                if (!fs.existsSync(imgPath)) {
+                    imgPath = getLocalBotImagePath('default') || getLocalBotImagePath();
+                }
+                if (imgPath && fs.existsSync(imgPath)) {
+                    thumbnailBuffer = fs.readFileSync(imgPath);
+                }
+            } catch (e) {
+                console.error("Erreur lecture miniature menu:", e);
+            }
+
+            // Définition de l'externalAdReply
             const externalAdReply = {
                 title: `WELCOME TO ${botName}`,
                 body: `${totalCmds} COMMANDS • v1.0.0`,
                 mediaType: 1,
-                renderLargerThumbnail: true
+                renderLargerThumbnail: true,
+                ...(thumbnailBuffer ? { thumbnail: thumbnailBuffer } : {})
             };
+
+            const baseContext = getContextInfo(mek.sender);
 
             await sendWithBotImage(kaya, from, mek.sender, { 
                 caption: finalMenuText, 
                 contextInfo: { 
+                    ...baseContext, 
                     mentionedJid: [userId],
-                    externalAdReply: externalAdReply
+                    externalAdReply: {
+                        ...(baseContext?.externalAdReply || {}),
+                        ...externalAdReply
+                    }
                 } 
             });
 
