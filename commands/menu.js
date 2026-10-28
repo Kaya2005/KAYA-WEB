@@ -1,7 +1,6 @@
 // ==================== commands/menu.js ====================
 import fs from 'fs';
 import path from 'path';
-import { getContextInfo } from '../setting/contextInfo.js';
 import { getBotName, sendWithBotImage } from '../setting/botAssets.js';
 
 // Table de conversion pour transformer le texte standard en sᴍᴀʟʟ ᴄᴀᴘs stylisés
@@ -98,9 +97,20 @@ ${buildHeader({ user: userMention, prefix, totalCmds, botName })}
 ${menuList.trim()}
 `.trim();
 
+            // Définition de l'externalAdReply avec le support flexible de la miniature
+            const externalAdReply = {
+                title: `WELCOME TO ${botName}`,
+                body: `${totalCmds} COMMANDS • v1.0.0`,
+                mediaType: 1,
+                renderLargerThumbnail: true
+            };
+
             await sendWithBotImage(kaya, from, mek.sender, { 
                 caption: finalMenuText, 
-                contextInfo: { ...getContextInfo(mek.sender), mentionedJid: [userId] } 
+                contextInfo: { 
+                    mentionedJid: [userId],
+                    externalAdReply: externalAdReply
+                } 
             });
 
         } catch (err) {
