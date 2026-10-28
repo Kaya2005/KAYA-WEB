@@ -18,11 +18,9 @@ function toSmallCaps(str) {
 // 🎨 Style avec conservation du préfixe `>` et alignement parfait des encadrés
 function buildHeader({ user, prefix, totalCmds, botName }) {
         return `
-          ◈┈▉ \`${botName}\` ▉┄◈
 > ╭────↯
 > │ ➠ *𝙾𝚆𝙽𝙴𝚁:* ${user}
 > │ ➠ *𝙿𝚁𝙴𝙵𝙸𝚇:* ${prefix || 'Sans préfixe'}
-> │ ➠ *𝚃𝙾𝚃𝙰𝙻 𝙲𝙼𝙳𝚂:* ${totalCmds}
 > ╰────↯
 
 `.trim();
@@ -116,7 +114,7 @@ ${menuList.trim()}
             // Définition de l'externalAdReply
             const externalAdReply = {
                 title: `WELCOME TO ${botName}`,
-                body: `${totalCmds} COMMANDS • v1.0.0`,
+                body: `${totalCmds} COMMANDS • v3`,
                 mediaType: 1,
                 renderLargerThumbnail: true,
                 ...(thumbnailBuffer ? { thumbnail: thumbnailBuffer } : {})
