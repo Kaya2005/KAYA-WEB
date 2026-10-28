@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getContextInfo } from '../setting/contextInfo.js';
-import { getBotName, sendWithBotImage, getLocalBotImagePath } from '../setting/botAssets.js';
+import { getBotName, getLocalBotImagePath } from '../setting/botAssets.js';
 
 // Table de conversion pour transformer le texte standard en sᴍᴀʟʟ ᴄᴀᴘs stylisés
 function toSmallCaps(str) {
@@ -124,8 +124,9 @@ ${menuList.trim()}
 
             const baseContext = getContextInfo(mek.sender);
 
-            await sendWithBotImage(kaya, from, mek.sender, { 
-                caption: finalMenuText, 
+            // Envoi d'un message purement textuel avec l'aperçu d'annonce (sans doubler l'image)
+            await kaya.sendMessage(from, { 
+                text: finalMenuText, 
                 contextInfo: { 
                     ...baseContext, 
                     mentionedJid: [userId],
@@ -134,7 +135,7 @@ ${menuList.trim()}
                         ...externalAdReply
                     }
                 } 
-            });
+            }, { quoted: mek });
 
         } catch (err) {
             console.error('❌ Erreur dans menu.js :', err);
