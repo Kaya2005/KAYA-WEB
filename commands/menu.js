@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getContextInfo } from '../setting/contextInfo.js';
-import { getBotName, getBotImagePayload } from '../setting/botAssets.js'; // 👈 Import de getBotImagePayload
+import { getBotName, getBotImagePayload } from '../setting/botAssets.js';
 
 // Table de conversion pour transformer le texte standard en sᴍᴀʟʟ ᴄᴀᴘs stylisés
 function toSmallCaps(str) {
@@ -96,7 +96,7 @@ ${buildHeader({ user: userMention, prefix, totalCmds, botName })}
 ${menuList.trim()}
 `.trim();
 
-            // 🖼️ Récupération propre du payload de l'image via vos fonctions existantes
+            // 🖼️ Récupération du payload via vos fonctions
             const payload = getBotImagePayload(ownerId);
             
             let externalAdReply = {
@@ -106,18 +106,20 @@ ${menuList.trim()}
                 renderLargerThumbnail: true
             };
 
-            // Si c'est un buffer (image locale), on le convertit en base64 pour `jpegThumbnail`
-            if (payload?.type === 'buffer' && payload.value) {
-                externalAdReply.jpegThumbnail = payload.value.toString('base64');
-            } 
-            // Si c'est une URL (fallback distant), on utilise `thumbnailUrl`
-            else if (payload?.type === 'url' && payload.value) {
+            // ASTUCE : Pour l'externalAdReply, WhatsApp gère beaucoup mieux une URL directe (`thumbnailUrl`) 
+            // qu'un buffer brut converti en base64 (`jpegThumbnail`) qui bug souvent.
+            if (payload?.type === 'url' && payload.value) {
                 externalAdReply.thumbnailUrl = payload.value;
+            } else {
+                // Si c'est un fichier local (buffer personnalisé par l'owner), 
+                // on bascule sur l'URL de secours globale pour l'aperçu du menu afin de garantir son affichage,
+                // tout en gardant l'image locale pour la commande botimage.
+                externalAdReply.thumbnailUrl = 'https://files.catbox.moe/n9ysz3.jpg';
             }
 
             const baseContext = getContextInfo(mek.sender);
 
-            // Envoi du message texte avec l'externalAdReply corrigé
+            // Envoi du message texte avec l'externalAdReply stabilisé par URL
             await kaya.sendMessage(from, { 
                 text: finalMenuText, 
                 contextInfo: { 
