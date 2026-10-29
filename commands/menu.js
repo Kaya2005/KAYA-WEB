@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getContextInfo } from '../setting/contextInfo.js';
-import { getBotName, getBotImagePayload } from '../setting/botAssets.js';
+import { getBotName, sendWithBotImage, BOT_VERSION } from '../setting/botAssets.js'; // 👈 Import de BOT_VERSION
 
 // Table de conversion pour transformer le texte standard en sᴍᴀʟʟ ᴄᴀᴘs stylisés
 function toSmallCaps(str) {
@@ -15,12 +15,14 @@ function toSmallCaps(str) {
     return str.toLowerCase().split('').map(char => map[char] || char).join('');
 }
 
-// 🎨 Style avec conservation du préfixe `>` et alignement parfait des encadrés
+// 🎨 En-tête avec l'owner, le préfixe, le nombre de commandes et la version
 function buildHeader({ user, prefix, totalCmds, botName }) {
         return `
 > ╭────↯
 > │ ➠ *𝙾𝚆𝙽𝙴𝚁:* ${user}
 > │ ➠ *𝙿𝚁𝙴𝙵𝙸𝚇:* ${prefix || 'Sans préfixe'}
+> │ ➠ *𝙲𝙼𝙳𝚂:* ${totalCmds}
+> │ ➠ *𝚅𝙴𝚁𝚂𝙸𝙾𝙽:* v${BOT_VERSION}
 > ╰────↯
 
 `.trim();
@@ -96,41 +98,22 @@ ${buildHeader({ user: userMention, prefix, totalCmds, botName })}
 ${menuList.trim()}
 `.trim();
 
-            // 🖼️ Récupération du payload via vos fonctions
-            const payload = getBotImagePayload(ownerId);
-            
-            let externalAdReply = {
-                title: `WELCOME TO ${botName}`,
-                body: `${totalCmds} COMMANDS • v3`,
-                mediaType: 1,
-                renderLargerThumbnail: true
-            };
-
-            // ASTUCE : Pour l'externalAdReply, WhatsApp gère beaucoup mieux une URL directe (`thumbnailUrl`) 
-            // qu'un buffer brut converti en base64 (`jpegThumbnail`) qui bug souvent.
-            if (payload?.type === 'url' && payload.value) {
-                externalAdReply.thumbnailUrl = payload.value;
-            } else {
-                // Si c'est un fichier local (buffer personnalisé par l'owner), 
-                // on bascule sur l'URL de secours globale pour l'aperçu du menu afin de garantir son affichage,
-                // tout en gardant l'image locale pour la commande botimage.
-                externalAdReply.thumbnailUrl = 'https://files.catbox.moe/n9ysz3.jpg';
-            }
-
             const baseContext = getContextInfo(mek.sender);
 
-            // Envoi du message texte avec l'externalAdReply stabilisé par URL
-            await kaya.sendMessage(from, { 
-                text: finalMenuText, 
-                contextInfo: { 
-                    ...baseContext, 
-                    mentionedJid: [userId],
-                    externalAdReply: {
-                        ...(baseContext?.externalAdReply || {}),
-                        ...externalAdReply
-                    }
-                } 
-            }, { quoted: mek });
+            // Envoi de l'image avec le texte mis à jour
+            await sendWithBotImage(
+                kaya, 
+                from, 
+                ownerId, 
+                { 
+                    caption: finalMenuText, 
+                    contextInfo: { 
+                        ...baseContext, 
+                        mentionedJid: [userId] 
+                    } 
+                }, 
+                { quoted: mek }
+            );
 
         } catch (err) {
             console.error('❌ Erreur dans menu.js :', err);
