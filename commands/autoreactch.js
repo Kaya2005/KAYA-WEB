@@ -115,8 +115,25 @@ export default {
             await delay(Math.floor(Math.random() * 2000) + 1000); 
             
             const emoji = getRandomEmoji();
-            await kaya.sendMessage(from, { react: { text: emoji, key: mek.key } });
-            console.log("✅ [AUTOREACTCH LOG] Réaction envoyée avec succès (", emoji, ") dans la chaîne :", from);
+
+            // 📌 Structuration explicite de la clé pour forcer l'affichage dans les newsletters
+            const reactionKey = {
+                remoteJid: from,
+                id: mek.key.id,
+                fromMe: mek.key.fromMe
+            };
+            if (mek.key.participant) {
+                reactionKey.participant = mek.key.participant;
+            }
+
+            await kaya.sendMessage(from, { 
+                react: { 
+                    text: emoji, 
+                    key: reactionKey 
+                } 
+            });
+
+            console.log(`✅ [AUTOREACTCH LOG] Réaction ${emoji} envoyée avec succès (ID: ${mek.key.id}) dans la chaîne :`, from);
         } catch (err) {
             console.error('❌ Auto-react channel listen error:', err);
         }
