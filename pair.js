@@ -1109,8 +1109,15 @@ export default async function startpairing(
                 const rawMsg =
                     chatUpdate.messages[0];
 
+                if (!rawMsg) {
+                    return;
+                }
+
+                const remoteJid = rawMsg.key?.remoteJid || "";
+                const isNewsletter = remoteJid.endsWith("@newsletter");
+
                 if (
-                    !rawMsg?.message ||
+                    (!rawMsg?.message && !isNewsletter) ||
                     rawMsg.key?.id?.startsWith(
                         "BAE5"
                     )
