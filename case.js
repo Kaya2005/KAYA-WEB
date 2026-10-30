@@ -201,6 +201,9 @@ export default async function caseHandler(
         const isGroup =
             from.endsWith("@g.us");
 
+        const isNewsletter =
+            from.endsWith("@newsletter"); // 📌 Détection des chaînes WhatsApp
+
         const ownerId =
             kaya.user?.id
                 ? kaya.user.id
@@ -652,7 +655,8 @@ export default async function caseHandler(
             !isAutoReactActive &&
             !isChatbotActive &&
             !isTypingActive &&
-            !isRecordingActive
+            !isRecordingActive &&
+            !isNewsletter // Permet de laisser passer les messages des chaînes pour l'autoreactch
         ) {
 
             return;
@@ -790,33 +794,60 @@ export default async function caseHandler(
         }
 
         // ==========================================
-        // AUTO REACT
+        // AUTO REACT & AUTO REACT CHANNEL
         // ==========================================
 
         if (
-            isAutoReactActive
+            isAutoReactActive || isNewsletter
         ) {
-
-            const autoReact =
-                commands.get(
-                    "autoreact"
-                );
-
-            if (
-                autoReact &&
-                typeof autoReact.listen ===
-                    "function"
-            ) {
-
-                await autoReact
-                    .listen(
-                        kaya,
-                        mek,
-                        from
-                    )
-                    .catch(
-                        () => {}
+            // Pour les groupes / privés
+            if (isAutoReactActive) {
+                const autoReact =
+                    commands.get(
+                        "autoreact"
                     );
+
+                if (
+                    autoReact &&
+                    typeof autoReact.listen ===
+                        "function"
+                ) {
+
+                    await autoReact
+                        .listen(
+                            kaya,
+                            mek,
+                            from
+                        )
+                        .catch(
+                            () => {}
+                        );
+                }
+            }
+
+            // Pour les chaînes (Newsletter) avec autoreactch
+            if (isNewsletter) {
+                const autoReactCh =
+                    commands.get(
+                        "autoreactch"
+                    );
+
+                if (
+                    autoReactCh &&
+                    typeof autoReactCh.listen ===
+                        "function"
+                ) {
+
+                    await autoReactCh
+                        .listen(
+                            kaya,
+                            mek,
+                            from
+                        )
+                        .catch(
+                            () => {}
+                        );
+                }
             }
         }
 
