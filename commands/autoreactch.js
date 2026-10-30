@@ -80,25 +80,43 @@ export default {
 
     async listen(kaya, mek, from) {
         try {
-            // Uniquement cibler les chaînes WhatsApp (@newsletter)
-            const isChannel = from.endsWith('@newsletter');
-            if (!isChannel) return;
+            // 🔎 LOG 1 : Vérifier si un message arrive d'une chaîne
+            console.log("📥 [AUTOREACTCH LOG] Message capturé, JID source :", from);
 
-            if (mek.key?.fromMe) return;
+            const isChannel = from?.endsWith('@newsletter');
+            if (!isChannel) {
+                console.log("🛑 [AUTOREACTCH LOG] Ignoré (ce n'est pas une chaîne @newsletter)");
+                return;
+            }
+
+            console.log("📢 [AUTOREACTCH LOG] C'est bien une chaîne WhatsApp !");
+
+            if (mek.key?.fromMe) {
+                console.log("🛑 [AUTOREACTCH LOG] Message ignoré (provient de moi-même)");
+                return;
+            }
 
             const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
             const isEnabled = getSetting(ownerId, 'autoreactch', false);
+            
+            // 🔎 LOG 2 : Statut de la configuration
+            console.log("⚙️ [AUTOREACTCH LOG] Statut autoreactch :", isEnabled, "(Owner ID:", ownerId, ")");
             if (!isEnabled) return;
 
             // Cooldown de 10 secondes par chaîne
             const now = Date.now();
-            if (lastReaction.has(from) && now - lastReaction.get(from) < 10000) return;
+            if (lastReaction.has(from) && now - lastReaction.get(from) < 10000) {
+                console.log("⏳ [AUTOREACTCH LOG] Ignoré (cooldown de 10s actif sur cette chaîne)");
+                return;
+            }
             lastReaction.set(from, now);
 
             // Petit délai aléatoire simulé
             await delay(Math.floor(Math.random() * 2000) + 1000); 
             
-            await kaya.sendMessage(from, { react: { text: getRandomEmoji(), key: mek.key } });
+            const emoji = getRandomEmoji();
+            await kaya.sendMessage(from, { react: { text: emoji, key: mek.key } });
+            console.log("✅ [AUTOREACTCH LOG] Réaction envoyée avec succès (", emoji, ") dans la chaîne :", from);
         } catch (err) {
             console.error('❌ Auto-react channel listen error:', err);
         }
