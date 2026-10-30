@@ -1,141 +1,85 @@
 // autoreactch.js
 import { getSetting, setSetting } from '../setting.js';
-import { boxMessage, errorBox, successBox } from '../setting/theme.js';
+import { boxMessage, errorBox, successBox, usageBox } from '../setting/theme.js';
 import { getString } from '../setting/language.js';
 
 const RANDOM_EMOJIS = ['❤️','😂','🎉','👍','🔥','😮','👏','🎊','🤯','😍','🥰','😎','🤩','💯','✨','🌟','💖','💕','💙','💚','💛','💜','🖤','🤍','🧡','😊','😇','🥳','😋','😜','🤪','🤗','🤭'];
 const getRandomEmoji = () => RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
-
-const lastReaction = new Map();
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default {
     name: 'autoreactch',
     category: 'Owner',
-    description: 'Activer ou désactiver l\'auto-réaction dans les chaînes (Channels)',
+    description: 'Réagir automatiquement à une publication spécifique d\'une chaîne via son lien',
     ownerOnly: true,
 
     async execute(kaya, mek, from, args, prefix) {
         try {
             const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
-            const rawAction = args[0]?.toLowerCase();
+            const inputLink = args[0]; // Le lien de l'actu ex: https://whatsapp.com/channel/.../104
 
-            const actionMap = {
-                "on": "on",
-                "oui": "on",
-                "yes": "on",
-
-                "off": "off",
-                "non": "off",
-                "no": "off",
-
-                "status": "status",
-                "statut": "status"
-            };
-
-            const action = actionMap[rawAction];
-
-            if (!action) {
-                const menuContent = 
-                    `• \`${prefix}autoreactch on / oui\` : Activer\n` +
-                    `• \`${prefix}autoreactch off / non\` : Désactiver\n` +
-                    `• \`${prefix}autoreactch status\` : Vérifier le statut`;
+            if (!inputLink || !inputLink.includes('whatsapp.com/channel/')) {
+                const usageContent = 
+                    `• Utilisez le lien de l'actualité de la chaîne :\n` +
+                    `\`${prefix}autoreactch https://whatsapp.com/channel/CODE/ID_MESSAGE\`\n\n` +
+                    `*Exemple :*\n` +
+                    `\`${prefix}autoreactch https://whatsapp.com/channel/0029Vb8GO1G9hXFAF1Taqr0q/104\``;
 
                 return kaya.sendMessage(from, { 
-                    text: boxMessage('AUTOREACT CHANNEL', menuContent, '📢') 
+                    text: boxMessage('REACTION CIBLÉE - CHAÎNE', usageContent, '🔗') 
                 }, { quoted: mek });
             }
 
-            if (action === 'on') {
-                setSetting(ownerId, 'autoreactch', true);
-                return kaya.sendMessage(from, { 
-                    text: successBox('Auto-réaction pour les chaînes activée avec succès ! 📢') 
-                }, { quoted: mek });
-            }
+            // Extraction de l'ID du message à la fin du lien (ex: /104 -> 104)
+            const parts = inputLink.split('/');
+            const messageId = parts[parts.length - 1];
 
-            if (action === 'off') {
-                setSetting(ownerId, 'autoreactch', false);
-                return kaya.sendMessage(from, { 
-                    text: boxMessage('AUTOREACT CHANNEL', 'Auto-réaction pour les chaînes désactivée. ❌', '📢') 
-                }, { quoted: mek });
-            }
-
-            if (action === 'status') {
-                const isEnabled = getSetting(ownerId, 'autoreactch', false);
-                const statusValue = isEnabled ? 'ACTIVÉ ✅' : 'DÉSACTIVÉ ❌';
-
-                const statusContent = `• *Statut Chaînes :* ${statusValue}`;
-                return kaya.sendMessage(from, { 
-                    text: boxMessage('STATUT AUTOREACT CHANNEL', statusContent, '📊') 
-                }, { quoted: mek });
-            }
-        } catch (err) { 
-            console.error('❌ autoreactch error:', err);
-            const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
-            await kaya.sendMessage(from, { 
-                text: errorBox('Une erreur est survenue avec la commande autoreactch.') 
-            }, { quoted: mek });
-        }
-    },
-
-    async listen(kaya, mek, from) {
-        try {
-            // 🔎 LOG 1 : Vérifier si un message arrive d'une chaîne
-            console.log("📥 [AUTOREACTCH LOG] Message capturé, JID source :", from);
-
-            const isChannel = from?.endsWith('@newsletter');
-            if (!isChannel) {
-                console.log("🛑 [AUTOREACTCH LOG] Ignoré (ce n'est pas une chaîne @newsletter)");
-                return;
-            }
-
-            console.log("📢 [AUTOREACTCH LOG] C'est bien une chaîne WhatsApp !");
-
-            if (mek.key?.fromMe) {
-                console.log("🛑 [AUTOREACTCH LOG] Message ignoré (provient de moi-même)");
-                return;
-            }
-
-            const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
-            const isEnabled = getSetting(ownerId, 'autoreactch', false);
+            // Extraction du code de la chaîne (ex: 0029Vb8GO1G9hXFAF1Taqr0q)
+            // Sur WhatsApp, le JID d'une chaîne utilise souvent un format interne, 
+            // mais on peut tenter de résoudre ou d'utiliser directement le lien si géré par Baileys,
+            // ou cibler le chat actuel si vous êtes dans la chaîne.
             
-            // 🔎 LOG 2 : Statut de la configuration
-            console.log("⚙️ [AUTOREACTCH LOG] Statut autoreactch :", isEnabled, "(Owner ID:", ownerId, ")");
-            if (!isEnabled) return;
-
-            // Cooldown de 10 secondes par chaîne
-            const now = Date.now();
-            if (lastReaction.has(from) && now - lastReaction.get(from) < 10000) {
-                console.log("⏳ [AUTOREACTCH LOG] Ignoré (cooldown de 10s actif sur cette chaîne)");
-                return;
+            if (!messageId || isNaN(messageId)) {
+                return kaya.sendMessage(from, { 
+                    text: errorBox('Lien invalide. Impossible de trouver l\'identifiant de l\'actualité à la fin du lien.') 
+                }, { quoted: mek });
             }
-            lastReaction.set(from, now);
 
-            // Petit délai aléatoire simulé
-            await delay(Math.floor(Math.random() * 2000) + 1000); 
-            
+            await kaya.sendMessage(from, { text: successBox(`⏳ Recherche et ciblage de l'actualité ID : ${messageId}...`) }, { quoted: mek });
+
+            // Petit délai de sécurité
+            await delay(1000);
+
+            // Pour réagir à une publication spécifique via son ID numérique dans la chaîne où l'on se trouve :
             const emoji = getRandomEmoji();
+            
+            // Construction de la clé spécifique pour l'actualité ciblée
+            // Note: Les IDs de messages de chaînes nécessitent parfois le JID complet de la newsletter
+            const targetJid = from.endsWith('@newsletter') ? from : `${parts[4]}@newsletter`;
 
-            // 📌 Structuration explicite de la clé pour forcer l'affichage dans les newsletters
             const reactionKey = {
-                remoteJid: from,
-                id: mek.key.id,
-                fromMe: mek.key.fromMe
+                remoteJid: targetJid,
+                id: messageId,
+                fromMe: false
             };
-            if (mek.key.participant) {
-                reactionKey.participant = mek.key.participant;
-            }
 
-            await kaya.sendMessage(from, { 
+            await kaya.sendMessage(targetJid, { 
                 react: { 
                     text: emoji, 
                     key: reactionKey 
                 } 
             });
 
-            console.log(`✅ [AUTOREACTCH LOG] Réaction ${emoji} envoyée avec succès (ID: ${mek.key.id}) dans la chaîne :`, from);
-        } catch (err) {
-            console.error('❌ Auto-react channel listen error:', err);
+            return kaya.sendMessage(from, { 
+                text: successBox(`✅ Réaction (${emoji}) envoyée avec succès sur l'actualité ${messageId} !`) 
+            }, { quoted: mek });
+
+        } catch (err) { 
+            console.error('❌ autoreactch error:', err);
+            const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
+            await kaya.sendMessage(from, { 
+                text: errorBox('Une erreur est survenue lors de la tentative de réaction sur la chaîne.') 
+            }, { quoted: mek });
         }
     }
 };
