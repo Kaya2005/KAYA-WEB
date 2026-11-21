@@ -3,157 +3,100 @@
 // Traitement séquentiel des commandes
 // ==========================================
 
-import {
-    getContentType
-} from "@whiskeysockets/baileys";
+import { getContentType } from "@whiskeysockets/baileys";
 
 import fs from "fs";
 import path from "path";
 
-import {
-    pathToFileURL
-} from "url";
+import { pathToFileURL } from "url";
 
 import chalk from "chalk";
 
 import decodeJid from "./setting/decodeJid.js";
 
-import checkAdminOrOwner from
-    "./setting/checkAdminOrOwner.js";
+import checkAdminOrOwner from "./setting/checkAdminOrOwner.js";
 
-import {
-    getSetting
-} from "./setting.js";
+import { getSetting } from "./setting.js";
 
-import {
-    getString
-} from "./setting/language.js"; // 🌐 Import de la gestion des langues
+import { getString } from "./setting/language.js"; // 🌐 Import de la gestion des langues
 
 // ==========================================
 // ANTI DELETE
 // ==========================================
 
-import {
-    storeMessage
-} from "./commands/antidelete.js";
+import { storeMessage } from "./commands/antidelete.js";
 
 // ==========================================
 // PATH
 // ==========================================
 
-const __dirname =
-    path.resolve();
+const __dirname = path.resolve();
 
 // ==========================================
 // COMMANDES
 // ==========================================
 
-export const commands =
-    new Map();
+export const commands = new Map();
 
-const commandsPath =
-    path.join(
-        __dirname,
-        "commands"
-    );
+const commandsPath = path.join(__dirname, "commands");
 
 // ==========================================
 // TRACKERS
 // ==========================================
 
-const presenceTracker =
-    new Map();
+const presenceTracker = new Map();
 
-const cooldownTracker =
-    new Map();
+const cooldownTracker = new Map();
 
-const chatbotCooldownTracker =
-    new Map();
+const chatbotCooldownTracker = new Map();
+
+// ==========================================
+// LISTE DES UTILITAIRES (anti-*)
+// ==========================================
+
+const UTILITIES = [
+    "antibot",
+    "antilink",
+    "antitag",
+    "antispam",
+    "antistatus",
+    "antigroupstatus",
+    "antimention"
+];
 
 // ==========================================
 // CHARGEMENT COMMANDES
 // ==========================================
 
-if (
-    fs.existsSync(
-        commandsPath
-    )
-) {
+if (fs.existsSync(commandsPath)) {
+    const commandFiles = fs
+        .readdirSync(commandsPath)
+        .filter(file => file.endsWith(".js"));
 
-    const commandFiles =
-        fs
-            .readdirSync(
-                commandsPath
-            )
-            .filter(
-                file =>
-                    file.endsWith(".js")
-            );
-
-    for (
-        const file
-        of commandFiles
-    ) {
-
+    for (const file of commandFiles) {
         try {
+            const fileUrl = pathToFileURL(path.join(commandsPath, file)).href;
 
-            const fileUrl =
-                pathToFileURL(
-                    path.join(
-                        commandsPath,
-                        file
-                    )
-                ).href;
+            const cmdModule = await import(fileUrl);
 
-            const cmdModule =
-                await import(
-                    fileUrl
-                );
+            const cmd = cmdModule.default || cmdModule;
 
-            const cmd =
-                cmdModule.default ||
-                cmdModule;
-
-            if (
-                cmd?.name
-            ) {
-
-                commands.set(
-                    cmd.name.toLowerCase(),
-                    cmd
-                );
+            if (cmd?.name) {
+                commands.set(cmd.name.toLowerCase(), cmd);
             }
 
-            const cmdAliases =
-                cmd?.aliases ||
-                cmd?.alias;
+            const cmdAliases = cmd?.aliases || cmd?.alias;
 
-            if (
-                Array.isArray(
-                    cmdAliases
-                )
-            ) {
-
-                cmdAliases.forEach(
-                    alias => {
-
-                        if (alias) {
-
-                            commands.set(
-                                alias.toLowerCase(),
-                                cmd
-                            );
-                        }
+            if (Array.isArray(cmdAliases)) {
+                cmdAliases.forEach(alias => {
+                    if (alias) {
+                        commands.set(alias.toLowerCase(), cmd);
                     }
-                );
+                });
             }
-
         } catch (error) {
-
             console.error(
-                chalk.red(
-                    `[ERREUR] Impossible de charger ${file}:`
-                ),
+                chalk.red(`[ERREUR] Impossible de charger ${file}:`),
                 error
             );
         }
@@ -170,9 +113,7 @@ export default async function caseHandler(
     chatUpdate,
     store = null
 ) {
-
     try {
-
         // ==========================================
         // VALIDATION
         // ==========================================
@@ -184,63 +125,36 @@ export default async function caseHandler(
             !mek.key.id ||
             mek.key.id.startsWith("BAE5")
         ) {
-
             return;
         }
 
-        const sender =
-            mek.sender;
+        const sender = mek.sender;
 
-        const from =
-            mek.key.remoteJid;
+        const from = mek.key.remoteJid;
 
         if (!from) {
             return;
         }
 
-        const isGroup =
-            from.endsWith("@g.us");
+        const isGroup = from.endsWith("@g.us");
 
-        const isNewsletter =
-            from.endsWith("@newsletter"); // 📌 Détection des chaînes WhatsApp
+        const isNewsletter = from.endsWith("@newsletter"); // 📌 Détection des chaînes WhatsApp
 
-        const ownerId =
-            kaya.user?.id
-                ? kaya.user.id
-                    .split(":")[0]
-                : "";
+        const ownerId = kaya.user?.id ? kaya.user.id.split(":")[0] : "";
 
-        const groupId =
-            from.split("@")[0];
+        const groupId = from.split("@")[0];
 
         // ==========================================
         // ANTI DELETE
         // ==========================================
 
         if (
-            getSetting(
-                ownerId,
-                "antidelete",
-                false,
-                isGroup
-                    ? groupId
-                    : null
-            )
+            getSetting(ownerId, "antidelete", false, isGroup ? groupId : null)
         ) {
-
             try {
-
-                storeMessage(
-                    kaya,
-                    mek
-                );
-
+                storeMessage(kaya, mek);
             } catch (error) {
-
-                console.error(
-                    "[ANTIDELETE STORE ERROR]:",
-                    error
-                );
+                console.error("[ANTIDELETE STORE ERROR]:", error);
             }
         }
 
@@ -248,31 +162,11 @@ export default async function caseHandler(
         // STATUS
         // ==========================================
 
-        if (
-            from ===
-            "status@broadcast"
-        ) {
+        if (from === "status@broadcast") {
+            const autostatus = commands.get("autostatus");
 
-            const autostatus =
-                commands.get(
-                    "autostatus"
-                );
-
-            if (
-                autostatus &&
-                typeof autostatus.detect ===
-                    "function"
-            ) {
-
-                await autostatus
-                    .detect(
-                        kaya,
-                        mek,
-                        from
-                    )
-                    .catch(
-                        () => {}
-                    );
+            if (autostatus && typeof autostatus.detect === "function") {
+                await autostatus.detect(kaya, mek, from).catch(() => {});
             }
 
             return;
@@ -282,40 +176,26 @@ export default async function caseHandler(
         // EXTRACTION TEXTE
         // ==========================================
 
-        const type =
-            getContentType(
-                mek.message
-            );
+        const type = getContentType(mek.message);
 
         let body = "";
 
         switch (type) {
-
             case "interactiveResponseMessage": {
-
                 const paramsJson =
-                    mek.message
-                        ?.interactiveResponseMessage
-                        ?.nativeFlowResponseMessage
-                        ?.paramsJson;
+                    mek.message?.interactiveResponseMessage
+                        ?.nativeFlowResponseMessage?.paramsJson;
 
                 if (paramsJson) {
-
                     try {
-
-                        const parsed =
-                            JSON.parse(
-                                paramsJson
-                            );
+                        const parsed = JSON.parse(paramsJson);
 
                         body =
                             parsed.id ||
                             parsed.selectedId ||
                             parsed.command ||
                             "";
-
                     } catch {
-
                         body = "";
                     }
                 }
@@ -324,66 +204,32 @@ export default async function caseHandler(
             }
 
             case "templateButtonReplyMessage":
-
                 body =
-                    mek.message
-                        ?.templateButtonReplyMessage
-                        ?.selectedId ||
-                    "";
-
+                    mek.message?.templateButtonReplyMessage?.selectedId || "";
                 break;
 
             case "buttonsResponseMessage":
-
                 body =
-                    mek.message
-                        ?.buttonsResponseMessage
-                        ?.selectedButtonId ||
-                    "";
-
+                    mek.message?.buttonsResponseMessage?.selectedButtonId || "";
                 break;
 
             case "conversation":
-
-                body =
-                    mek.message
-                        ?.conversation ||
-                    "";
-
+                body = mek.message?.conversation || "";
                 break;
 
             case "extendedTextMessage":
-
-                body =
-                    mek.message
-                        ?.extendedTextMessage
-                        ?.text ||
-                    "";
-
+                body = mek.message?.extendedTextMessage?.text || "";
                 break;
 
             case "imageMessage":
-
-                body =
-                    mek.message
-                        ?.imageMessage
-                        ?.caption ||
-                    "";
-
+                body = mek.message?.imageMessage?.caption || "";
                 break;
 
             case "videoMessage":
-
-                body =
-                    mek.message
-                        ?.videoMessage
-                        ?.caption ||
-                    "";
-
+                body = mek.message?.videoMessage?.caption || "";
                 break;
 
             default:
-
                 body = "";
         }
 
@@ -397,68 +243,34 @@ export default async function caseHandler(
         let args = [];
 
         if (body) {
-
-            const trimmedBody =
-                body.trim();
+            const trimmedBody = body.trim();
 
             if (trimmedBody) {
+                const splitArgs = trimmedBody.split(/\s+/);
 
-                const splitArgs =
-                    trimmedBody.split(
-                        /\s+/
-                    );
+                const firstWord = splitArgs[0]?.toLowerCase() || "";
 
-                const firstWord =
-                    splitArgs[0]
-                        ?.toLowerCase() ||
-                    "";
+                const userPrefix = getSetting(ownerId, "prefix", ".");
 
-                const userPrefix =
-                    getSetting(
-                        ownerId,
-                        "prefix",
-                        "."
-                    );
+                const isAllPrefixEnabled = Boolean(
+                    getSetting(ownerId, "allPrefix", false)
+                );
 
-                const isAllPrefixEnabled =
-                    Boolean(
-                        getSetting(
-                            ownerId,
-                            "allPrefix",
-                            false
-                        )
-                    );
-
-                const noPrefixEnabled =
-                    Boolean(
-                        getSetting(
-                            ownerId,
-                            "noPrefix",
-                            false
-                        )
-                    );
+                const noPrefixEnabled = Boolean(
+                    getSetting(ownerId, "noPrefix", false)
+                );
 
                 // ==========================================
                 // NO PREFIX
                 // ==========================================
 
-                if (
-                    noPrefixEnabled
-                ) {
-
-                    if (
-                        commands.has(
-                            firstWord
-                        )
-                    ) {
-
+                if (noPrefixEnabled) {
+                    if (commands.has(firstWord)) {
                         prefix = "";
 
-                        args =
-                            splitArgs;
+                        args = splitArgs;
 
-                        commandName =
-                            firstWord;
+                        commandName = firstWord;
 
                         isCommand = true;
                     }
@@ -468,43 +280,19 @@ export default async function caseHandler(
                 // PREFIX PERSONNALISÉ
                 // ==========================================
 
-                else if (
-                    userPrefix &&
-                    trimmedBody.startsWith(
-                        userPrefix
-                    )
-                ) {
+                else if (userPrefix && trimmedBody.startsWith(userPrefix)) {
+                    prefix = userPrefix;
 
-                    prefix =
-                        userPrefix;
+                    const commandText = trimmedBody
+                        .slice(userPrefix.length)
+                        .trim();
 
-                    const commandText =
-                        trimmedBody
-                            .slice(
-                                userPrefix.length
-                            )
-                            .trim();
+                    args = commandText ? commandText.split(/\s+/) : [];
 
-                    args =
-                        commandText
-                            ? commandText.split(
-                                /\s+/
-                            )
-                            : [];
+                    const rawCmd = args[0]?.toLowerCase();
 
-                    const rawCmd =
-                        args[0]
-                            ?.toLowerCase();
-
-                    if (
-                        rawCmd &&
-                        commands.has(
-                            rawCmd
-                        )
-                    ) {
-
-                        commandName =
-                            rawCmd;
+                    if (rawCmd && commands.has(rawCmd)) {
+                        commandName = rawCmd;
 
                         isCommand = true;
                     }
@@ -516,49 +304,25 @@ export default async function caseHandler(
 
                 else if (
                     isAllPrefixEnabled &&
-                    /^[\p{Extended_Pictographic}\p{S}\p{P}]/u
-                        .test(
-                            trimmedBody
-                        )
+                    /^[\p{Extended_Pictographic}\p{S}\p{P}]/u.test(trimmedBody)
                 ) {
-
-                    const match =
-                        trimmedBody.match(
-                            /^[\p{Extended_Pictographic}\p{S}\p{P}]/u
-                        );
+                    const match = trimmedBody.match(
+                        /^[\p{Extended_Pictographic}\p{S}\p{P}]/u
+                    );
 
                     if (match) {
+                        prefix = match[0];
 
-                        prefix =
-                            match[0];
+                        const commandText = trimmedBody
+                            .slice(prefix.length)
+                            .trim();
 
-                        const commandText =
-                            trimmedBody
-                                .slice(
-                                    prefix.length
-                                )
-                                .trim();
+                        args = commandText ? commandText.split(/\s+/) : [];
 
-                        args =
-                            commandText
-                                ? commandText.split(
-                                    /\s+/
-                                )
-                                : [];
+                        const rawCmd = args[0]?.toLowerCase();
 
-                        const rawCmd =
-                            args[0]
-                                ?.toLowerCase();
-
-                        if (
-                            rawCmd &&
-                            commands.has(
-                                rawCmd
-                            )
-                        ) {
-
-                            commandName =
-                                rawCmd;
+                        if (rawCmd && commands.has(rawCmd)) {
+                            commandName = rawCmd;
 
                             isCommand = true;
                         }
@@ -571,36 +335,13 @@ export default async function caseHandler(
         // UTILITAIRES ACTIFS
         // ==========================================
 
-        const utilsList = [
-            "antibot",
-            "antilink",
-            "antitag",
-            "antispam",
-            "antistatus",
-            "antimention"
-        ];
+        let hasActiveUtility = false;
 
-        let hasActiveUtility =
-            false;
-
-        for (
-            const utilName
-            of utilsList
-        ) {
-
+        for (const utilName of UTILITIES) {
             if (
-                getSetting(
-                    ownerId,
-                    utilName,
-                    false,
-                    isGroup
-                        ? groupId
-                        : null
-                )
+                getSetting(ownerId, utilName, false, isGroup ? groupId : null)
             ) {
-
-                hasActiveUtility =
-                    true;
+                hasActiveUtility = true;
 
                 break;
             }
@@ -610,36 +351,23 @@ export default async function caseHandler(
         // AUTO REACT ACTIF ?
         // ==========================================
 
-        const isAutoReactActive =
-            Boolean(
-                getSetting(
-                    ownerId,
-                    "autoreact",
-                    false
-                )
-            );
+        const isAutoReactActive = Boolean(
+            getSetting(ownerId, "autoreact", false)
+        );
 
         // ==========================================
         // CHATBOT ACTIF ?
         // ==========================================
 
-        const chatbotMode =
-            getSetting(
-                ownerId,
-                "chatbot_mode",
-                "off"
-            );
+        const chatbotMode = getSetting(ownerId, "chatbot_mode", "off");
 
-        const isChatbotActive =
-            chatbotMode !== "off";
+        const isChatbotActive = chatbotMode !== "off";
 
         // ==========================================
         // VÉRIFICATION DES MODES TYPING ET RECORDING
         // ==========================================
 
-        const isTypingActive = Boolean(
-            getSetting(ownerId, "typing", false)
-        );
+        const isTypingActive = Boolean(getSetting(ownerId, "typing", false));
 
         const isRecordingActive = Boolean(
             getSetting(ownerId, "recording", false)
@@ -658,7 +386,6 @@ export default async function caseHandler(
             !isRecordingActive &&
             !isNewsletter // Permet de laisser passer les messages des chaînes pour l'autoreactch
         ) {
-
             return;
         }
 
@@ -666,11 +393,7 @@ export default async function caseHandler(
         // CHATBOT
         // ==========================================
 
-        if (
-            !isCommand &&
-            isChatbotActive
-        ) {
-
+        if (!isCommand && isChatbotActive) {
             const isMedia = [
                 "imageMessage",
                 "videoMessage",
@@ -679,43 +402,22 @@ export default async function caseHandler(
                 "audioMessage"
             ].includes(type);
 
-            if (
-                !isMedia &&
-                body
-            ) {
-
-                const chatbotModule =
-                    commands.get(
-                        "chatbot"
-                    );
+            if (!isMedia && body) {
+                const chatbotModule = commands.get("chatbot");
 
                 if (
                     chatbotModule &&
-                    typeof chatbotModule.listen ===
-                        "function"
+                    typeof chatbotModule.listen === "function"
                 ) {
-
-                    const chatbotKey =
-                        `${ownerId}:${from}`;
+                    const chatbotKey = `${ownerId}:${from}`;
 
                     const lastChatbotMessage =
-                        chatbotCooldownTracker.get(
-                            chatbotKey
-                        ) || 0;
+                        chatbotCooldownTracker.get(chatbotKey) || 0;
 
-                    if (
-                        Date.now() -
-                        lastChatbotMessage >=
-                        4000
-                    ) {
-
-                        chatbotCooldownTracker.set(
-                            chatbotKey,
-                            Date.now()
-                        );
+                    if (Date.now() - lastChatbotMessage >= 4000) {
+                        chatbotCooldownTracker.set(chatbotKey, Date.now());
 
                         try {
-
                             await chatbotModule.listen(
                                 kaya,
                                 mek,
@@ -723,13 +425,10 @@ export default async function caseHandler(
                                 body,
                                 ownerId
                             );
-
                         } catch (error) {
-
                             console.error(
                                 "[CHATBOT ERROR]:",
-                                error?.message ||
-                                error
+                                error?.message || error
                             );
                         }
                     }
@@ -741,55 +440,25 @@ export default async function caseHandler(
         // PRÉSENCE (Typing / Recording)
         // ==========================================
 
-        const lastPresence =
-            presenceTracker.get(
-                from
-            ) || 0;
+        const lastPresence = presenceTracker.get(from) || 0;
 
-        if (
-            Math.random() > 0.4 &&
-            Date.now() -
-                lastPresence >
-                30000
-        ) {
-
-            let presenceSent =
-                false;
+        if (Math.random() > 0.4 && Date.now() - lastPresence > 30000) {
+            let presenceSent = false;
 
             if (isTypingActive) {
-
-                await kaya
-                    .sendPresenceUpdate(
-                        "composing",
-                        from
-                    )
-                    .catch(
-                        () => {}
-                    );
+                await kaya.sendPresenceUpdate("composing", from).catch(() => {});
 
                 presenceSent = true;
             }
 
             if (isRecordingActive) {
-
-                await kaya
-                    .sendPresenceUpdate(
-                        "recording",
-                        from
-                    )
-                    .catch(
-                        () => {}
-                    );
+                await kaya.sendPresenceUpdate("recording", from).catch(() => {});
 
                 presenceSent = true;
             }
 
             if (presenceSent) {
-
-                presenceTracker.set(
-                    from,
-                    Date.now()
-                );
+                presenceTracker.set(from, Date.now());
             }
         }
 
@@ -797,56 +466,22 @@ export default async function caseHandler(
         // AUTO REACT & AUTO REACT CHANNEL
         // ==========================================
 
-        if (
-            isAutoReactActive || isNewsletter
-        ) {
+        if (isAutoReactActive || isNewsletter) {
             // Pour les groupes / privés
             if (isAutoReactActive) {
-                const autoReact =
-                    commands.get(
-                        "autoreact"
-                    );
+                const autoReact = commands.get("autoreact");
 
-                if (
-                    autoReact &&
-                    typeof autoReact.listen ===
-                        "function"
-                ) {
-
-                    await autoReact
-                        .listen(
-                            kaya,
-                            mek,
-                            from
-                        )
-                        .catch(
-                            () => {}
-                        );
+                if (autoReact && typeof autoReact.listen === "function") {
+                    await autoReact.listen(kaya, mek, from).catch(() => {});
                 }
             }
 
             // Pour les chaînes (Newsletter) avec autoreactch
             if (isNewsletter) {
-                const autoReactCh =
-                    commands.get(
-                        "autoreactch"
-                    );
+                const autoReactCh = commands.get("autoreactch");
 
-                if (
-                    autoReactCh &&
-                    typeof autoReactCh.listen ===
-                        "function"
-                ) {
-
-                    await autoReactCh
-                        .listen(
-                            kaya,
-                            mek,
-                            from
-                        )
-                        .catch(
-                            () => {}
-                        );
+                if (autoReactCh && typeof autoReactCh.listen === "function") {
+                    await autoReactCh.listen(kaya, mek, from).catch(() => {});
                 }
             }
         }
@@ -855,10 +490,7 @@ export default async function caseHandler(
         // UTILITAIRES
         // ==========================================
 
-        if (
-            hasActiveUtility
-        ) {
-
+        if (hasActiveUtility) {
             await executeUtilities(
                 kaya,
                 mek,
@@ -882,83 +514,32 @@ export default async function caseHandler(
         // OWNER / SUDO
         // ==========================================
 
-        const status =
-            await checkAdminOrOwner(
-                kaya,
-                from,
-                sender
-            );
+        const status = await checkAdminOrOwner(kaya, from, sender);
 
-        const sudoList =
-            getSetting(
-                ownerId,
-                "sudo_list",
-                []
-            );
+        const sudoList = getSetting(ownerId, "sudo_list", []);
 
-        const isSudo =
-            Array.isArray(
-                sudoList
-            ) &&
-            sudoList.includes(
-                sender
-            );
+        const isSudo = Array.isArray(sudoList) && sudoList.includes(sender);
 
         // ==========================================
         // MODE PRIVÉ
         // ==========================================
 
-        if (
-            !mek.key.fromMe
-        ) {
+        if (!mek.key.fromMe) {
+            const privateMode = getSetting(ownerId, "privateMode", false);
 
-            const privateMode =
-                getSetting(
-                    ownerId,
-                    "privateMode",
-                    false
-                );
+            const blockInbox = getSetting(ownerId, "blockInbox", false);
 
-            const blockInbox =
-                getSetting(
-                    ownerId,
-                    "blockInbox",
-                    false
-                );
+            const userPrefix = getSetting(ownerId, "prefix", ".");
 
-            const userPrefix =
-                getSetting(
-                    ownerId,
-                    "prefix",
-                    "."
-                );
-
-            const lowerBody =
-                body.toLowerCase();
+            const lowerBody = body.toLowerCase();
 
             const isPairCommand =
-                lowerBody.startsWith(
-                    `${userPrefix}pair`
-                ) ||
-                lowerBody.startsWith(
-                    "pair"
-                );
+                lowerBody.startsWith(`${userPrefix}pair`) ||
+                lowerBody.startsWith("pair");
 
             if (!isPairCommand) {
-
-                if (
-                    privateMode ||
-                    (
-                        blockInbox &&
-                        !isGroup
-                    )
-                ) {
-
-                    if (
-                        !status.isBotOwner &&
-                        !isSudo
-                    ) {
-
+                if (privateMode || (blockInbox && !isGroup)) {
+                    if (!status.isBotOwner && !isSudo) {
                         return;
                     }
                 }
@@ -969,14 +550,7 @@ export default async function caseHandler(
         // UTILISATEUR BANNI
         // ==========================================
 
-        if (
-            getSetting(
-                ownerId,
-                `banned_${sender}`,
-                false
-            )
-        ) {
-
+        if (getSetting(ownerId, `banned_${sender}`, false)) {
             return;
         }
 
@@ -984,20 +558,15 @@ export default async function caseHandler(
         // RÉCUPÉRATION COMMANDE
         // ==========================================
 
-        const rawCommand =
-            args.shift();
+        const rawCommand = args.shift();
 
         if (!rawCommand) {
             return;
         }
 
-        const command =
-            rawCommand.toLowerCase();
+        const command = rawCommand.toLowerCase();
 
-        const cmd =
-            commands.get(
-                command
-            );
+        const cmd = commands.get(command);
 
         if (!cmd) {
             return;
@@ -1007,21 +576,11 @@ export default async function caseHandler(
         // OWNER ONLY
         // ==========================================
 
-        if (
-            cmd.ownerOnly &&
-            !status.isBotOwner &&
-            !isSudo
-        ) {
-
+        if (cmd.ownerOnly && !status.isBotOwner && !isSudo) {
             return await kaya.sendMessage(
                 from,
-                {
-                    text:
-                        getString(ownerId, 'ownerOnly')
-                },
-                {
-                    quoted: mek
-                }
+                { text: getString(ownerId, "ownerOnly") },
+                { quoted: mek }
             );
         }
 
@@ -1029,20 +588,11 @@ export default async function caseHandler(
         // GROUP ONLY
         // ==========================================
 
-        if (
-            cmd.group &&
-            !isGroup
-        ) {
-
+        if (cmd.group && !isGroup) {
             return await kaya.sendMessage(
                 from,
-                {
-                    text:
-                        getString(ownerId, 'groupOnly')
-                },
-                {
-                    quoted: mek
-                }
+                { text: getString(ownerId, "groupOnly") },
+                { quoted: mek }
             );
         }
 
@@ -1050,20 +600,11 @@ export default async function caseHandler(
         // ADMIN ONLY
         // ==========================================
 
-        if (
-            cmd.admin &&
-            !status.isAdmin
-        ) {
-
+        if (cmd.admin && !status.isAdmin) {
             return await kaya.sendMessage(
                 from,
-                {
-                    text:
-                        getString(ownerId, 'adminOnly')
-                },
-                {
-                    quoted: mek
-                }
+                { text: getString(ownerId, "adminOnly") },
+                { quoted: mek }
             );
         }
 
@@ -1071,17 +612,9 @@ export default async function caseHandler(
         // ANTI FLOOD
         // ==========================================
 
-        const lastCommandTime =
-            cooldownTracker.get(
-                sender
-            ) || 0;
+        const lastCommandTime = cooldownTracker.get(sender) || 0;
 
-        if (
-            Date.now() -
-            lastCommandTime <
-            3000
-        ) {
-
+        if (Date.now() - lastCommandTime < 3000) {
             console.log(
                 chalk.yellow(
                     `[ANTI-FLOOD] Commande ${command} ignorée pour ${sender}`
@@ -1091,80 +624,38 @@ export default async function caseHandler(
             return;
         }
 
-        cooldownTracker.set(
-            sender,
-            Date.now()
-        );
+        cooldownTracker.set(sender, Date.now());
 
         // ==========================================
         // BOT ADMIN
         // ==========================================
 
-        if (
-            cmd.botAdmin
-        ) {
-
-            const metadata =
-                await kaya
-                    .groupMetadata(
-                        from
-                    )
-                    .catch(
-                        () => null
-                    );
+        if (cmd.botAdmin) {
+            const metadata = await kaya.groupMetadata(from).catch(() => null);
 
             if (!metadata) {
-
                 return await kaya.sendMessage(
                     from,
-                    {
-                        text:
-                            "Error reading group metadata."
-                    },
-                    {
-                        quoted: mek
-                    }
+                    { text: "Error reading group metadata." },
+                    { quoted: mek }
                 );
             }
 
-            const botNumber =
-                decodeJid(
-                    kaya.user.id
+            const botNumber = decodeJid(kaya.user.id).split("@")[0];
+
+            const botData = metadata.participants.find(participant => {
+                const participantNumber = (
+                    participant.phoneNumber || decodeJid(participant.id)
                 ).split("@")[0];
 
-            const botData =
-                metadata.participants.find(
-                    participant => {
+                return participantNumber === botNumber;
+            });
 
-                        const participantNumber =
-                            (
-                                participant.phoneNumber ||
-                                decodeJid(
-                                    participant.id
-                                )
-                            ).split("@")[0];
-
-                        return (
-                            participantNumber ===
-                            botNumber
-                        );
-                    }
-                );
-
-            if (
-                !botData ||
-                botData.admin === null
-            ) {
-
+            if (!botData || botData.admin === null) {
                 return await kaya.sendMessage(
                     from,
-                    {
-                        text:
-                            getString(ownerId, 'botAdmin')
-                    },
-                    {
-                        quoted: mek
-                    }
+                    { text: getString(ownerId, "botAdmin") },
+                    { quoted: mek }
                 );
             }
         }
@@ -1174,19 +665,10 @@ export default async function caseHandler(
         // ==========================================
 
         console.log(
-            chalk.black(
-                chalk.bgWhite(
-                    "[ CMD ]"
-                )
-            ),
-            chalk.green(
-                command
-            ),
+            chalk.black(chalk.bgWhite("[ CMD ]")),
+            chalk.green(command),
             "from",
-            chalk.blue(
-                mek.pushName ||
-                from
-            )
+            chalk.blue(mek.pushName || from)
         );
 
         // ==========================================
@@ -1203,67 +685,27 @@ export default async function caseHandler(
                 return kaya.sendMessage(jid, content, options);
             };
 
-            if (
-                typeof cmd.execute ===
-                "function"
-            ) {
-
-                await cmd.execute(
-                    clientForCmd,
-                    mek,
-                    from,
-                    args,
-                    prefix
-                );
-
-            } else if (
-                typeof cmd.run ===
-                "function"
-            ) {
-
-                await cmd.run(
-                    clientForCmd,
-                    mek,
-                    args,
-                    prefix
-                );
+            if (typeof cmd.execute === "function") {
+                await cmd.execute(clientForCmd, mek, from, args, prefix);
+            } else if (typeof cmd.run === "function") {
+                await cmd.run(clientForCmd, mek, args, prefix);
             }
-
         } catch (cmdErr) {
-
             console.error(
-                chalk.red(
-                    `[ERREUR COMMANDE] (${command}):`
-                ),
-                cmdErr.stack ||
-                cmdErr
+                chalk.red(`[ERREUR COMMANDE] (${command}):`),
+                cmdErr.stack || cmdErr
             );
 
             await kaya
                 .sendMessage(
                     from,
-                    {
-                        text:
-                            getString(ownerId, 'errorOccurred')
-                    },
-                    {
-                        quoted: mek
-                    }
+                    { text: getString(ownerId, "errorOccurred") },
+                    { quoted: mek }
                 )
-                .catch(
-                    () => {}
-                );
+                .catch(() => {});
         }
-
     } catch (err) {
-
-        console.error(
-            chalk.red(
-                "[ERROR case.js]:"
-            ),
-            err.stack ||
-            err
-        );
+        console.error(chalk.red("[ERROR case.js]:"), err.stack || err);
     }
 }
 
@@ -1280,85 +722,25 @@ async function executeUtilities(
     groupId,
     isGroup
 ) {
-
-    const utils = [
-
-        {
-            name: "antibot",
-            setting: "antibot"
-        },
-
-        {
-            name: "antilink",
-            setting: "antilink"
-        },
-
-        {
-            name: "antitag",
-            setting: "antitag"
-        },
-
-        {
-            name: "antispam",
-            setting: "antispam"
-        },
-
-        {
-            name: "antistatus",
-            setting: "antistatus"
-        },
-
-        {
-            name: "antimention",
-            setting: "antimention"
-        }
-    ];
-
-    for (
-        const utilConf
-        of utils
-    ) {
-
-        const isEnabled =
-            getSetting(
-                ownerId,
-                utilConf.setting,
-                false,
-                isGroup
-                    ? groupId
-                    : null
-            );
+    for (const name of UTILITIES) {
+        const isEnabled = getSetting(
+            ownerId,
+            name,
+            false,
+            isGroup ? groupId : null
+        );
 
         if (!isEnabled) {
             continue;
         }
 
-        const util =
-            commands.get(
-                utilConf.name
-            );
+        const util = commands.get(name);
 
-        if (
-            util &&
-            typeof util.detect ===
-                "function"
-        ) {
-
+        if (util && typeof util.detect === "function") {
             try {
-
-                await util.detect(
-                    kaya,
-                    mek,
-                    from,
-                    body
-                );
-
+                await util.detect(kaya, mek, from, body);
             } catch (error) {
-
-                console.error(
-                    `[UTILITY ERROR - ${utilConf.name}]:`,
-                    error
-                );
+                console.error(`[UTILITY ERROR - ${name}]:`, error);
             }
         }
     }

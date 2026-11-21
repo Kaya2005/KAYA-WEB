@@ -57,12 +57,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ==========================================
-// DEBUG (lancer avec DEBUG_STATUS=1 pour voir les types de messages de groupe)
-// ==========================================
-
-const DEBUG_STATUS = process.env.DEBUG_STATUS === "1";
-
-// ==========================================
 // DOSSIER PAIRING UNIFIÉ
 // ==========================================
 
@@ -548,14 +542,6 @@ export default async function startpairing(
                     rawMsg.key?.id?.startsWith("BAE5")
                 ) {
                     continue;
-                }
-
-                // 🔍 Debug : voir le type exact des messages de groupe
-                if (DEBUG_STATUS && remoteJid.endsWith("@g.us")) {
-                    console.log(
-                        `${logPrefix} [DEBUG MSG]`,
-                        Object.keys(rawMsg.message || {})
-                    );
                 }
 
                 const mek = smsg(kaya, rawMsg);
