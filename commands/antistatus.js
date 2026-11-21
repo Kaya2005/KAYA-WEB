@@ -1,150 +1,124 @@
-// ==================== commands/autostatus.js ====================
-import { getSetting, setSetting } from '../setting.js';
-import { boxMessage, errorBox, successBox, usageBox } from '../setting/theme.js';
+// antistatus.js
+import { getSetting, setSetting } from "../setting.js";
+import { boxMessage, errorBox, successBox } from "../setting/theme.js";
 
-// 🛡️ Suivi anti-ban isolé par utilisateur (clé = ownerId)
-const userRateLimits = new Map();
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const KEY_VIEW = 'autostatus_view';
-const KEY_LIKE = 'autostatus_like';
-const KEY_EMOJI = 'autostatus_emoji';
+const getOwnerId = (kaya) =>
+  kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
 
-const readState = (ownerId) => {
-    const view = getSetting(ownerId, KEY_VIEW, true);
-    const like = getSetting(ownerId, KEY_LIKE, true);
-    const emoji = getSetting(ownerId, KEY_EMOJI, '💚');
+// Détecte un message "statut qui mentionne le groupe" (recherche récursive)
+function isGroupStatusMention(mek) {
+  const seen = new Set();
 
-    return {
-        autoView: typeof view === 'boolean' ? view : true,
-        autoLike: typeof like === 'boolean' ? like : true,
-        likeEmoji: typeof emoji === 'string' && emoji.trim() ? emoji.trim() : '💚'
-    };
-};
+  const scan = (obj, depth = 0) => {
+    if (!obj || typeof obj !== "object" || depth > 4 || seen.has(obj)) return false;
+    seen.add(obj);
+
+    for (const k of Object.keys(obj)) {
+      if (/statusmention|groupstatus/i.test(k)) return true;
+      if (scan(obj[k], depth + 1)) return true;
+    }
+    return false;
+  };
+
+  return scan(mek.message);
+}
 
 export default {
-    name: 'autostatus',
-    aliases: ['statusauto', 'autostory'],
-    description: '🤖 Auto view et auto like des statuts WhatsApp',
-    category: 'Owner',
-    ownerOnly: true,
+  name: "antistatus",
+  description: "Supprime les statuts qui mentionnent le groupe",
+  category: "Group",
+  group: true,
+  admin: true,
+  botAdmin: true,
 
-    async execute(kaya, mek, from, args, prefix) {
-        try {
-            const ownerId = kaya.user.id.split(':')[0];
-            const sub = String(args[0] || 'status').toLowerCase();
-            const state = readState(ownerId);
+  async execute(kaya, mek, from, args, prefix) {
+    try {
+      const ownerId = getOwnerId(kaya);
+      const groupId = from.split('@')[0];
 
-            if (sub === 'on') {
-                setSetting(ownerId, KEY_VIEW, true);
-                setSetting(ownerId, KEY_LIKE, true);
-                
-                const successContent = `ᴀᴜᴛᴏ sᴛᴀᴛᴜs ᴠɪᴇᴡ & ʟɪᴋᴇ ᴇɴᴀʙʟᴇᴅ.\n• *ᴇᴍᴏᴊɪ :* ${state.likeEmoji}`;
-                return await kaya.sendMessage(from, { text: successBox(successContent) }, { quoted: mek });
-            }
+      const actionMap = {
+        on: "delete", oui: "delete", yes: "delete",
+        delete: "delete", supprimer: "delete",
+        kick: "kick", expulser: "kick",
+        off: "off", non: "off", no: "off",
+        status: "status", statut: "status"
+      };
 
-            if (sub === 'off') {
-                setSetting(ownerId, KEY_VIEW, false);
-                setSetting(ownerId, KEY_LIKE, false);
-                return await kaya.sendMessage(from, { text: boxMessage('auto status', 'ᴀᴜᴛᴏ sᴛᴀᴛᴜs ᴠɪᴇᴡ & ʟɪᴋᴇ ᴅɪsᴀʙʟᴇᴅ.', '❌') }, { quoted: mek });
-            }
+      const action = actionMap[args[0]?.toLowerCase()];
 
-            if (sub === 'view') {
-                const next = String(args[1] || '').toLowerCase();
-                if (!['on', 'off'].includes(next)) {
-                    return await kaya.sendMessage(from, { text: usageBox(prefix, 'autostatus view', '<on|off>') }, { quoted: mek });
-                }
-                setSetting(ownerId, KEY_VIEW, next === 'on');
-                
-                const viewText = `ᴀᴜᴛᴏ sᴛᴀᴛᴜs ᴠɪᴇᴡ ${next === 'on' ? 'ᴇɴᴀʙʟᴇᴅ' : 'ᴅɪsᴀʙʟᴇᴅ'}.`;
-                return await kaya.sendMessage(from, { text: boxMessage('auto status', viewText, '👁️') }, { quoted: mek });
-            }
+      if (!action) {
+        const menu =
+          `• \`${prefix}antistatus on / oui\` *(supprime le statut-mention)*\n` +
+          `• \`${prefix}antistatus kick / expulser\` *(supprime + expulse)*\n` +
+          `• \`${prefix}antistatus off / non\` *(désactive)*\n` +
+          `• \`${prefix}antistatus status / statut\` *(état actuel)*`;
+        return await kaya.sendMessage(from, {
+          text: boxMessage("ANTI STATUT MENTION", menu, '🛡️')
+        }, { quoted: mek });
+      }
 
-            if (sub === 'like') {
-                const next = String(args[1] || '').toLowerCase();
-                if (!['on', 'off'].includes(next)) {
-                    return await kaya.sendMessage(from, { text: usageBox(prefix, 'autostatus like', '<on|off>') }, { quoted: mek });
-                }
-                setSetting(ownerId, KEY_LIKE, next === 'on');
-                
-                const likeText = `ᴀᴜᴛᴏ sᴛᴀᴛᴜs ʟɪᴋᴇ ${next === 'on' ? 'ᴇɴᴀʙʟᴇᴅ' : 'ᴅɪsᴀʙʟᴇᴅ'}.`;
-                return await kaya.sendMessage(from, { text: boxMessage('auto status', likeText, '❤️') }, { quoted: mek });
-            }
+      if (action === "status") {
+        const enabled = getSetting(ownerId, "antistatus", false, groupId);
+        const mode = getSetting(ownerId, "antistatusMode", "delete", groupId);
+        const content = enabled
+          ? `• *Statut :* ✅ Activé\n• *Mode :* ${mode === "kick" ? "Supprimer + Expulser" : "Supprimer"}`
+          : `• *Statut :* ❌ Désactivé`;
+        return await kaya.sendMessage(from, {
+          text: boxMessage("ANTI STATUT MENTION", content, '📊')
+        }, { quoted: mek });
+      }
 
-            if (sub === 'emoji') {
-                const emoji = String(args[1] || '').trim();
-                if (!emoji) {
-                    return await kaya.sendMessage(from, { text: usageBox(prefix, 'autostatus emoji', '💚') }, { quoted: mek });
-                }
-                setSetting(ownerId, KEY_EMOJI, emoji);
-                
-                const emojiText = `ᴀᴜᴛᴏ sᴛᴀᴛᴜs ʟɪᴋᴇ ᴇᴍᴏᴊɪ sᴇᴛ ᴛᴏ ${emoji}`;
-                return await kaya.sendMessage(from, { text: successBox(emojiText) }, { quoted: mek });
-            }
+      if (action === "off") {
+        setSetting(ownerId, "antistatus", false, groupId);
+        return await kaya.sendMessage(from, {
+          text: boxMessage("ANTI STATUT MENTION", "Protection désactivée.", '❌')
+        }, { quoted: mek });
+      }
 
-            const currentState = readState(ownerId);
-            const menuContent = 
-                `• *ᴠɪᴇᴡ :* ${currentState.autoView ? 'ᴏɴ' : 'ᴏғғ'}\n` +
-                `• *ʟɪᴋᴇ :* ${currentState.autoLike ? 'ᴏɴ' : 'ᴏғғ'}\n` +
-                `• *ᴇᴍᴏᴊɪ :* ${currentState.likeEmoji}\n\n` +
-                `• \`${prefix}autostatus on\`\n` +
-                `• \`${prefix}autostatus off\`\n` +
-                `• \`${prefix}autostatus view on/off\`\n` +
-                `• \`${prefix}autostatus like on/off\`\n` +
-                `• \`${prefix}autostatus emoji 💚\``;
+      setSetting(ownerId, "antistatus", true, groupId);
+      setSetting(ownerId, "antistatusMode", action, groupId);
 
-            const menuText = boxMessage('auto status menu', menuContent, '📊');
-            await kaya.sendMessage(from, { text: menuText }, { quoted: mek });
+      await kaya.sendMessage(from, {
+        text: successBox(
+          `Anti statut-mention activé\n*${action === "kick" ? "Supprimer + Expulser" : "Supprimer"}*`
+        )
+      }, { quoted: mek });
 
-        } catch (err) {
-            console.error('❌ Erreur dans autostatus.js :', err);
-            await kaya.sendMessage(from, { text: errorBox(`ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ : ${err.message}`) }, { quoted: mek });
-        }
-    },
-
-    async detect(kaya, mek, from) {
-        try {
-            if (from !== 'status@broadcast' || mek.key.fromMe) return;
-
-            const ownerId = kaya.user.id.split(':')[0];
-            const participant = mek.key.participant || '';
-
-            // Ignorer les statuts en @lid pour éviter les rejets bloquants
-            if (participant.endsWith('@lid')) return;
-
-            const state = readState(ownerId);
-            if (!state.autoView && !state.autoLike) return;
-
-            // 🛡️ Gestion de l'anti-ban PROpre à cet utilisateur (`ownerId`)
-            const now = Date.now();
-            if (!userRateLimits.has(ownerId)) {
-                userRateLimits.set(ownerId, { lastAction: 0, count: 0 });
-            }
-            const userLimit = userRateLimits.get(ownerId);
-
-            // Réinitialisation du compteur toutes les minutes par exemple
-            if (now - userLimit.lastAction > 60000) {
-                userLimit.count = 0;
-                userLimit.lastAction = now;
-            }
-
-            // Limite fixée à 15 actions par minute par utilisateur (ajustable selon vos besoins)
-            if (userLimit.count > 15) {
-                console.log(`[BAN PROTECTION] Limite atteinte pour l'utilisateur ${ownerId}. Envoi bloqué temporairement.`);
-                return;
-            }
-            userLimit.count++;
-
-            if (state.autoView) {
-                await kaya.readMessages([mek.key]).catch(() => {});
-            }
-
-            if (state.autoLike) {
-                await kaya.sendMessage(from, {
-                    react: { text: state.likeEmoji, key: mek.key }
-                }).catch(() => {});
-            }
-        } catch (e) {
-            console.error('❌ Erreur dans autostatus detect:', e);
-        }
+    } catch (err) {
+      console.error("❌ Erreur antistatus:", err);
+      await kaya.sendMessage(from, { text: errorBox("Erreur antistatus.") }, { quoted: mek }).catch(() => {});
     }
+  },
+
+  async detect(kaya, mek, from, body) {
+    try {
+      if (!from.endsWith("@g.us") || mek.key?.fromMe) return;
+
+      const ownerId = getOwnerId(kaya);
+      const groupId = from.split('@')[0];
+
+      if (!getSetting(ownerId, "antistatus", false, groupId)) return;
+      if (!isGroupStatusMention(mek)) return;
+
+      const sender = mek.sender || mek.key.participant;
+
+      // Ne pas toucher aux admins
+      const metadata = await kaya.groupMetadata(from).catch(() => null);
+      const participant = metadata?.participants.find(p => p.id === sender);
+      if (participant?.admin) return;
+
+      await delay(500);
+      await kaya.sendMessage(from, { delete: mek.key }).catch(() => {});
+
+      const mode = getSetting(ownerId, "antistatusMode", "delete", groupId);
+      if (mode === "kick") {
+        await delay(1000);
+        await kaya.groupParticipantsUpdate(from, [sender], "remove").catch(() => {});
+      }
+    } catch (err) {
+      console.error("❌ AntiStatus detect error:", err);
+    }
+  }
 };
