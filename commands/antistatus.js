@@ -7,7 +7,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const getOwnerId = (kaya) =>
   kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
 
-// Détecte un message "statut qui mentionne le groupe" (recherche récursive)
+// Detects a "status that mentions the group" message (recursive scan)
 function isGroupStatusMention(mek) {
   const seen = new Set();
 
@@ -27,7 +27,7 @@ function isGroupStatusMention(mek) {
 
 export default {
   name: "antistatus",
-  description: "Supprime les statuts qui mentionnent le groupe",
+  description: "Deletes statuses that mention the group",
   category: "Group",
   group: true,
   admin: true,
@@ -38,11 +38,12 @@ export default {
       const ownerId = getOwnerId(kaya);
       const groupId = from.split('@')[0];
 
+      // English commands (French aliases kept for compatibility)
       const actionMap = {
-        on: "delete", oui: "delete", yes: "delete",
-        delete: "delete", supprimer: "delete",
+        on: "delete", yes: "delete", delete: "delete",
+        oui: "delete", supprimer: "delete",
         kick: "kick", expulser: "kick",
-        off: "off", non: "off", no: "off",
+        off: "off", no: "off", non: "off",
         status: "status", statut: "status"
       };
 
@@ -50,12 +51,12 @@ export default {
 
       if (!action) {
         const menu =
-          `• \`${prefix}antistatus on / oui\` *(supprime le statut-mention)*\n` +
-          `• \`${prefix}antistatus kick / expulser\` *(supprime + expulse)*\n` +
-          `• \`${prefix}antistatus off / non\` *(désactive)*\n` +
-          `• \`${prefix}antistatus status / statut\` *(état actuel)*`;
+          `• \`${prefix}antistatus on\` *(delete status mentions)*\n` +
+          `• \`${prefix}antistatus kick\` *(delete + remove sender)*\n` +
+          `• \`${prefix}antistatus off\` *(disable)*\n` +
+          `• \`${prefix}antistatus status\` *(current state)*`;
         return await kaya.sendMessage(from, {
-          text: boxMessage("ANTI STATUT MENTION", menu, '🛡️')
+          text: boxMessage("ANTI STATUS MENTION", menu, '🛡️')
         }, { quoted: mek });
       }
 
@@ -63,17 +64,17 @@ export default {
         const enabled = getSetting(ownerId, "antistatus", false, groupId);
         const mode = getSetting(ownerId, "antistatusMode", "delete", groupId);
         const content = enabled
-          ? `• *Statut :* ✅ Activé\n• *Mode :* ${mode === "kick" ? "Supprimer + Expulser" : "Supprimer"}`
-          : `• *Statut :* ❌ Désactivé`;
+          ? `• *Status:* ✅ Enabled\n• *Mode:* ${mode === "kick" ? "Delete + Remove" : "Delete"}`
+          : `• *Status:* ❌ Disabled`;
         return await kaya.sendMessage(from, {
-          text: boxMessage("ANTI STATUT MENTION", content, '📊')
+          text: boxMessage("ANTI STATUS MENTION", content, '📊')
         }, { quoted: mek });
       }
 
       if (action === "off") {
         setSetting(ownerId, "antistatus", false, groupId);
         return await kaya.sendMessage(from, {
-          text: boxMessage("ANTI STATUT MENTION", "Protection désactivée.", '❌')
+          text: boxMessage("ANTI STATUS MENTION", "Protection disabled.", '❌')
         }, { quoted: mek });
       }
 
@@ -82,13 +83,13 @@ export default {
 
       await kaya.sendMessage(from, {
         text: successBox(
-          `Anti statut-mention activé\n*${action === "kick" ? "Supprimer + Expulser" : "Supprimer"}*`
+          `Anti status mention enabled\n*${action === "kick" ? "Delete + Remove" : "Delete"}*`
         )
       }, { quoted: mek });
 
     } catch (err) {
-      console.error("❌ Erreur antistatus:", err);
-      await kaya.sendMessage(from, { text: errorBox("Erreur antistatus.") }, { quoted: mek }).catch(() => {});
+      console.error("❌ Antistatus error:", err);
+      await kaya.sendMessage(from, { text: errorBox("Antistatus error.") }, { quoted: mek }).catch(() => {});
     }
   },
 
@@ -104,7 +105,7 @@ export default {
 
       const sender = mek.sender || mek.key.participant;
 
-      // Ne pas toucher aux admins
+      // Skip group admins
       const metadata = await kaya.groupMetadata(from).catch(() => null);
       const participant = metadata?.participants.find(p => p.id === sender);
       if (participant?.admin) return;
