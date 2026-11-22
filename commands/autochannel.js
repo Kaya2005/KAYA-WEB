@@ -38,6 +38,22 @@ async function getRole(kaya, jid) {
 // ------------------------------------------------------------------
 const WINDOW_MS = 20000; // reactions are spread over 20 seconds
 
+// Safety limit: one user can trigger at most this many broadcasts per hour
+const MAX_BROADCASTS_PER_HOUR = 20;
+const broadcastLog = new Map(); // ownerId -> [timestamps]
+
+function canBroadcast(ownerId) {
+    const now = Date.now();
+    const list = (broadcastLog.get(ownerId) || []).filter(t => now - t < 60 * 60 * 1000);
+    if (list.length >= MAX_BROADCASTS_PER_HOUR) {
+        broadcastLog.set(ownerId, list);
+        return false;
+    }
+    list.push(now);
+    broadcastLog.set(ownerId, list);
+    return true;
+}
+
 function broadcastReaction(ownerKaya, channelJid, serverId, emojis) {
     const sessions = globalThis.kayaSessions;
     if (!sessions || typeof sessions.entries !== 'function') return;
@@ -46,7 +62,7 @@ function broadcastReaction(ownerKaya, channelJid, serverId, emojis) {
     for (const [number, tracker] of sessions.entries()) {
         if (!tracker?.isConnected || !tracker.connection) continue;
         if (tracker.connection === ownerKaya) continue;               // owner handled separately
-        if (!getSetting(number, 'supportch', true)) continue;         // opted out
+        if (!getSetting(number, 'supportch', true)) continue;         // opted out (.supportch off)
         targets.push({ number, kaya: tracker.connection });
     }
 
@@ -128,7 +144,7 @@ export default {
                     `┆ 💻 \`${prefix}autochannel on\` — Enable\n` +
                     `┆ 💻 \`${prefix}autochannel off\` — Disable\n` +
                     `┆ 💻 \`${prefix}autochannel emoji ❤️ 🔥\` — Choose emojis\n` +
-                    `┆ 💻 \`${prefix}autochannel all on|off\` — All sessions react`;
+                    `┆ 💻 \`${prefix}autochannel all on|off\` — All sessions react (default: on)`;
 
                 return await kaya.sendMessage(from, {
                     text: boxMessage('📢 AUTO-CHANNEL SETUP', content, '⚙️')
@@ -186,7 +202,8 @@ export default {
             const emoji = emojis[rand(0, emojis.length - 1)];
 
             // All other connected sessions react too (disable with: .autochannel all off)
-            if (getSetting(ownerId, 'autochannelAll', true)) {
+            // All other connected sessions react too (disable with: .autochannel all off)
+            if (getSetting(ownerId, 'autochannelAll', true) && canBroadcast(ownerId)) {
                 broadcastReaction(kaya, from, serverId, emojis);
             }
 

@@ -9,7 +9,7 @@ const getOwnerId = (kaya) =>
 export default {
     name: 'supportch',
     aliases: ['supportchannel'],
-    description: '📢 React to the KAYA channel posts with your number',
+    description: '📢 React to channel posts of KAYA bot users with your number',
     category: 'Admin',
     ownerOnly: true,
 
@@ -20,14 +20,14 @@ export default {
         if (action === 'on') {
             setSetting(ownerId, 'supportch', true);
             return await kaya.sendMessage(from, {
-                text: boxMessage('📢 SUPPORT CHANNEL', '✅ Enabled.\nYour number will react with an emoji to the KAYA channel posts.', '✅')
+                text: boxMessage('📢 SUPPORT CHANNEL', '✅ Enabled.\nYour number will react with an emoji to the channel posts of KAYA bot users.', '✅')
             }, { quoted: mek });
         }
 
         if (action === 'off') {
             setSetting(ownerId, 'supportch', false);
             return await kaya.sendMessage(from, {
-                text: boxMessage('📢 SUPPORT CHANNEL', '🔴 Disabled.\nYour number will no longer react to the channel posts.', '🔴')
+                text: boxMessage('📢 SUPPORT CHANNEL', '🔴 Disabled.\nYour number will no longer react to channel posts.', '🔴')
             }, { quoted: mek });
         }
 
