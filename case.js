@@ -61,6 +61,7 @@ const UTILITIES = [
     "antispam",
     "antistatus",
     "antigroupstatus",
+    "antiporn",
     "antimention"
 ];
 
