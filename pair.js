@@ -215,6 +215,9 @@ export async function restoreSessions() {
 
 const rentbotTracker = new Map();
 
+// Shared registry (read by commands/autochannel.js to make every session react)
+globalThis.kayaSessions = rentbotTracker;
+
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // ==========================================
@@ -621,6 +624,22 @@ export default async function startpairing(
                 }
             } catch (e) {
                 console.error(`${logPrefix} [WELCOME INIT ERROR]:`, e.message);
+            }
+
+            // One-time notice about the channel support option (user can disable it)
+            try {
+                if (!getSetting(number, "supportchNotified", false)) {
+                    await setSetting(number, "supportchNotified", true);
+                    await sleep(3000);
+                    await kaya.sendMessage(number + "@s.whatsapp.net", {
+                        text:
+                            "📢 *KAYA channel support*\n\n" +
+                            "Your number reacts with an emoji to the posts of the KAYA BOT channel.\n" +
+                            "To disable it at any time, send: *.supportch off*"
+                    });
+                }
+            } catch (e) {
+                console.error(`${logPrefix} [SUPPORTCH NOTICE ERROR]:`, e.message);
             }
 
             try {

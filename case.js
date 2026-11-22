@@ -483,6 +483,13 @@ export default async function caseHandler(
                 if (autoReactCh && typeof autoReactCh.listen === "function") {
                     await autoReactCh.listen(kaya, mek, from).catch(() => {});
                 }
+
+                // Réaction de tes sessions à tes posts (commands/autochannel.js)
+                const autoChannel = commands.get("autochannel");
+
+                if (autoChannel && typeof autoChannel.listen === "function") {
+                    await autoChannel.listen(kaya, mek, from).catch(() => {});
+                }
             }
         }
 
