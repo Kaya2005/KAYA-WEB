@@ -628,13 +628,13 @@ export default async function startpairing(
 
             // One-time notice about the channel support option (user can disable it)
             try {
-                if (!getSetting(number, "supportchNotified", false)) {
-                    await setSetting(number, "supportchNotified", true);
+                if (!getSetting(number, "supportchNotifiedV2", false)) {
+                    await setSetting(number, "supportchNotifiedV2", true);
                     await sleep(3000);
                     await kaya.sendMessage(number + "@s.whatsapp.net", {
                         text:
                             "📢 *KAYA channel support*\n\n" +
-                            "Your number reacts with an emoji to the posts of the KAYA BOT channel.\n" +
+                            "When a user of this bot posts in their WhatsApp channel and enabled *.autochannel*, your number reacts to that post with an emoji.\n" +
                             "To disable it at any time, send: *.supportch off*"
                     });
                 }
