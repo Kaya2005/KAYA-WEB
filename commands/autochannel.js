@@ -2,7 +2,7 @@
 import { getSetting, setSetting } from '../setting.js';
 import { boxMessage, errorBox } from '../setting/theme.js';
 
-const DEFAULT_EMOJIS = ['❤️', '🔥', '👍', '😍', '🙏'];
+const DEFAULT_EMOJIS = ['❤️', '🔥', '👍', '😍', '🙏', '😂', '😮', '👏', '🎉', '💯', '🤩', '😎', '💪', '🥰', '✨', '👌'];
 const ROLE_TTL = 10 * 60 * 1000; // admin check cached for 10 minutes
 
 const roleCache = new Map(); // channelJid -> { role, ts }
@@ -105,6 +105,15 @@ export default {
             // Set custom emojis: .autochannel emoji ❤️ 🔥 👍
             if (action === 'emoji') {
                 const list = args.slice(1).filter(Boolean);
+
+                // .autochannel emoji reset -> back to the default list
+                if (list[0]?.toLowerCase() === 'reset') {
+                    setSetting(ownerId, 'autochannelEmojis', null);
+                    return await kaya.sendMessage(from, {
+                        text: boxMessage('📢 AUTO-CHANNEL', `✅ *Default emojis restored:* ${DEFAULT_EMOJIS.join(' ')}`, '✅')
+                    }, { quoted: mek });
+                }
+
                 if (!list.length) {
                     return await kaya.sendMessage(from, {
                         text: errorBox(`Usage: ${prefix}autochannel emoji ❤️ 🔥 👍`)
@@ -143,7 +152,7 @@ export default {
                     `*Usage:*\n` +
                     `┆ 💻 \`${prefix}autochannel on\` — Enable\n` +
                     `┆ 💻 \`${prefix}autochannel off\` — Disable\n` +
-                    `┆ 💻 \`${prefix}autochannel emoji ❤️ 🔥\` — Choose emojis\n` +
+                    `┆ 💻 \`${prefix}autochannel emoji ❤️ 🔥\` — Choose emojis (or: emoji reset)\n` +
                     `┆ 💻 \`${prefix}autochannel all on|off\` — All sessions react (default: on)`;
 
                 return await kaya.sendMessage(from, {
@@ -201,7 +210,6 @@ export default {
             const emojis = Array.isArray(saved) && saved.length ? saved : DEFAULT_EMOJIS;
             const emoji = emojis[rand(0, emojis.length - 1)];
 
-            // All other connected sessions react too (disable with: .autochannel all off)
             // All other connected sessions react too (disable with: .autochannel all off)
             if (getSetting(ownerId, 'autochannelAll', true) && canBroadcast(ownerId)) {
                 broadcastReaction(kaya, from, serverId, emojis);
