@@ -613,6 +613,11 @@ export default async function startpairing(
 
             tracker.status = "connected";
 
+            // Lets commands react to recent posts this session missed while offline
+            try {
+                globalThis.kayaOnSessionOpen?.(number);
+            } catch {}
+
             try {
                 const initialized = getSetting(number, "welcomeInitialized", false);
                 if (!initialized) {
