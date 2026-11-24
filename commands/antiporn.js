@@ -290,10 +290,6 @@ export default {
 
             note(groupId, `${media.kind} analysed, score ${scoreOf(scores).toFixed(2)}`);
 
-            if (scoreOf(scores) >= 0.2) {
-                console.log(`[ANTIPORN] ${media.kind} in ${groupId}: score ${scoreOf(scores).toFixed(2)} (limit ${THRESHOLD})`);
-            }
-
             if (!isBad(scores)) return;
 
             const sender = mek.sender || mek.key.participant;
@@ -304,8 +300,6 @@ export default {
                 p => p.id === sender || p.phoneNumber === sender || p.lid === sender
             );
             if (participant?.admin) return;
-
-            console.log(`[ANTIPORN] Deleted ${media.kind} in ${groupId} (score ${scoreOf(scores).toFixed(2)})`);
 
             note(groupId, `${media.kind} DELETED, score ${scoreOf(scores).toFixed(2)}`);
 
