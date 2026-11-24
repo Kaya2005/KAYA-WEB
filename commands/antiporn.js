@@ -1,4 +1,4 @@
-// antiporno.js
+// antiporn.js
 import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { getSetting, setSetting } from '../setting.js';
 import { boxMessage, errorBox, successBox } from '../setting/theme.js';
@@ -116,8 +116,8 @@ async function analyse(media, isBad) {
 }
 
 export default {
-    name: 'antiporno',
-    aliases: ['antiporno', 'antinsfw', 'antistickerporn'],
+    name: 'antiporn',
+    aliases: ['antinsfw', 'antistickerporn'],
     description: 'Deletes pornographic stickers, images and videos in the group',
     category: 'Group',
     group: true,
@@ -132,7 +132,7 @@ export default {
 
             if (['on', 'delete', 'warn', 'kick'].includes(action)) {
                 const mode = action === 'on' ? 'delete' : action;
-                setSetting(ownerId, 'antiporno', true, groupId);
+                setSetting(ownerId, 'antiporn', true, groupId);
                 setSetting(ownerId, 'antipornMode', mode, groupId);
                 return await kaya.sendMessage(from, {
                     text: successBox(`Anti porn enabled\n*${MODE_LABEL[mode]}*`)
@@ -140,7 +140,7 @@ export default {
             }
 
             if (action === 'off') {
-                setSetting(ownerId, 'antiporno', false, groupId);
+                setSetting(ownerId, 'antiporn', false, groupId);
                 return await kaya.sendMessage(from, {
                     text: boxMessage('ANTI PORN', 'Protection disabled.', '❌')
                 }, { quoted: mek });
@@ -153,7 +153,7 @@ export default {
                 )];
                 if (!list.length) {
                     return await kaya.sendMessage(from, {
-                        text: errorBox(`Usage: ${prefix}antiporno types sticker image video\n(choose one or more)`)
+                        text: errorBox(`Usage: ${prefix}antiporn types sticker image video\n(choose one or more)`)
                     }, { quoted: mek });
                 }
                 setSetting(ownerId, 'antipornTypes', list, groupId);
@@ -166,7 +166,7 @@ export default {
                 const value = args[1]?.toLowerCase();
                 if (!['on', 'off'].includes(value)) {
                     return await kaya.sendMessage(from, {
-                        text: errorBox(`Usage: ${prefix}antiporno strict on|off`)
+                        text: errorBox(`Usage: ${prefix}antiporn strict on|off`)
                     }, { quoted: mek });
                 }
                 setSetting(ownerId, 'antipornStrict', value === 'on', groupId);
@@ -183,7 +183,7 @@ export default {
 
                 if (!kind) {
                     return await kaya.sendMessage(from, {
-                        text: errorBox(`Reply to an image, sticker or video with ${prefix}antiporno test`)
+                        text: errorBox(`Reply to an image, sticker or video with ${prefix}antiporn test`)
                     }, { quoted: mek });
                 }
 
@@ -210,7 +210,7 @@ export default {
             }
 
             if (action === 'status') {
-                const enabled = getSetting(ownerId, 'antiporno', false, groupId);
+                const enabled = getSetting(ownerId, 'antiporn', false, groupId);
                 const mode = getSetting(ownerId, 'antipornMode', 'delete', groupId);
                 const strict = getSetting(ownerId, 'antipornStrict', false, groupId);
                 const types = getSetting(ownerId, 'antipornTypes', ALL_TYPES, groupId);
@@ -228,14 +228,14 @@ export default {
             }
 
             const menu =
-                `• \`${prefix}antiporno on\` *(delete)*\n` +
-                `• \`${prefix}antiporno warn\` *(delete + warnings, remove at ${MAX_WARNINGS})*\n` +
-                `• \`${prefix}antiporno kick\` *(delete + remove sender)*\n` +
-                `• \`${prefix}antiporno types sticker image video\` *(what is checked)*\n` +
-                `• \`${prefix}antiporno strict on|off\` *(also "sexy" content)*\n` +
-                `• \`${prefix}antiporno test\` *(reply to a media to test it)*\n` +
-                `• \`${prefix}antiporno off\` *(disable)*\n` +
-                `• \`${prefix}antiporno status\` *(current state)*`;
+                `• \`${prefix}antiporn on\` *(delete)*\n` +
+                `• \`${prefix}antiporn warn\` *(delete + warnings, remove at ${MAX_WARNINGS})*\n` +
+                `• \`${prefix}antiporn kick\` *(delete + remove sender)*\n` +
+                `• \`${prefix}antiporn types sticker image video\` *(what is checked)*\n` +
+                `• \`${prefix}antiporn strict on|off\` *(also "sexy" content)*\n` +
+                `• \`${prefix}antiporn test\` *(reply to a media to test it)*\n` +
+                `• \`${prefix}antiporn off\` *(disable)*\n` +
+                `• \`${prefix}antiporn status\` *(current state)*`;
             await kaya.sendMessage(from, {
                 text: boxMessage('ANTI PORN', menu, '🛡️')
             }, { quoted: mek });
@@ -257,7 +257,7 @@ export default {
             const ownerId = getOwnerId(kaya);
             const groupId = from.split('@')[0];
 
-            if (!getSetting(ownerId, 'antiporno', false, groupId)) return;
+            if (!getSetting(ownerId, 'antiporn', false, groupId)) return;
 
             noteGroup = groupId;
             note(groupId, `${media.kind} received`);
