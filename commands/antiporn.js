@@ -25,6 +25,10 @@ const TYPE_ALIASES = {
 
 const resultCache = new Map(); // file sha256 -> scores (same file is not analysed twice)
 
+// Last thing detect() did in each group (shown by ".antiporn status", no console needed)
+const lastEvent = {};
+const note = (groupId, text) => { lastEvent[groupId] = { time: Date.now(), text }; };
+
 const getOwnerId = (kaya) =>
     kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
 
@@ -171,14 +175,53 @@ export default {
                 }, { quoted: mek });
             }
 
+            // Self-test: reply to an image / sticker / video with ".antiporn test"
+            if (action === 'test') {
+                const q = mek.quoted;
+                const kindMap = { stickerMessage: 'sticker', imageMessage: 'image', videoMessage: 'video' };
+                const kind = kindMap[q?.mtype];
+
+                if (!kind) {
+                    return await kaya.sendMessage(from, {
+                        text: errorBox(`Reply to an image, sticker or video with ${prefix}antiporn test`)
+                    }, { quoted: mek });
+                }
+
+                try {
+                    const scores = await analyse({ kind, msg: q, dlType: kind }, () => false);
+                    if (!scores) throw new Error('Could not read this file');
+
+                    const pct = (n) => `${Math.round((n || 0) * 100)}%`;
+                    const result =
+                        `• *Porn:* ${pct(scores.Porn)}\n` +
+                        `• *Hentai:* ${pct(scores.Hentai)}\n` +
+                        `• *Sexy:* ${pct(scores.Sexy)}\n` +
+                        `• *Neutral:* ${pct(scores.Neutral)}\n` +
+                        `• *Drawing:* ${pct(scores.Drawing)}\n\n` +
+                        `Limit: ${Math.round(THRESHOLD * 100)}% (Porn + Hentai)`;
+                    return await kaya.sendMessage(from, {
+                        text: boxMessage('ANTI PORN TEST', result, '🧪')
+                    }, { quoted: mek });
+                } catch (e) {
+                    return await kaya.sendMessage(from, {
+                        text: errorBox(`Analysis failed:\n${e?.message || e}`)
+                    }, { quoted: mek });
+                }
+            }
+
             if (action === 'status') {
                 const enabled = getSetting(ownerId, 'antiporn', false, groupId);
                 const mode = getSetting(ownerId, 'antipornMode', 'delete', groupId);
                 const strict = getSetting(ownerId, 'antipornStrict', false, groupId);
                 const types = getSetting(ownerId, 'antipornTypes', ALL_TYPES, groupId);
-                const content = enabled
+                let content = enabled
                     ? `• *Status:* ✅ Enabled\n• *Mode:* ${MODE_LABEL[mode] || mode}\n• *Checked:* ${types.join(', ')}\n• *Strict:* ${strict ? 'ON' : 'OFF'}`
                     : '• *Status:* ❌ Disabled';
+
+                const last = lastEvent[groupId];
+                content += last
+                    ? `\n• *Last check:* ${last.text} (${Math.round((Date.now() - last.time) / 1000)}s ago)`
+                    : '\n• *Last check:* nothing received yet since restart';
                 return await kaya.sendMessage(from, {
                     text: boxMessage('ANTI PORN', content, '📊')
                 }, { quoted: mek });
@@ -190,6 +233,7 @@ export default {
                 `• \`${prefix}antiporn kick\` *(delete + remove sender)*\n` +
                 `• \`${prefix}antiporn types sticker image video\` *(what is checked)*\n` +
                 `• \`${prefix}antiporn strict on|off\` *(also "sexy" content)*\n` +
+                `• \`${prefix}antiporn test\` *(reply to a media to test it)*\n` +
                 `• \`${prefix}antiporn off\` *(disable)*\n` +
                 `• \`${prefix}antiporn status\` *(current state)*`;
             await kaya.sendMessage(from, {
@@ -203,6 +247,7 @@ export default {
     },
 
     async detect(kaya, mek, from, body) {
+        let noteGroup = null;
         try {
             if (!from.endsWith('@g.us') || mek.key?.fromMe) return;
 
@@ -213,6 +258,9 @@ export default {
             const groupId = from.split('@')[0];
 
             if (!getSetting(ownerId, 'antiporn', false, groupId)) return;
+
+            noteGroup = groupId;
+            note(groupId, `${media.kind} received`);
 
             const types = getSetting(ownerId, 'antipornTypes', ALL_TYPES, groupId);
             if (!types.includes(media.kind)) return;
@@ -240,6 +288,12 @@ export default {
                 }
             }
 
+            note(groupId, `${media.kind} analysed, score ${scoreOf(scores).toFixed(2)}`);
+
+            if (scoreOf(scores) >= 0.2) {
+                console.log(`[ANTIPORN] ${media.kind} in ${groupId}: score ${scoreOf(scores).toFixed(2)} (limit ${THRESHOLD})`);
+            }
+
             if (!isBad(scores)) return;
 
             const sender = mek.sender || mek.key.participant;
@@ -252,6 +306,8 @@ export default {
             if (participant?.admin) return;
 
             console.log(`[ANTIPORN] Deleted ${media.kind} in ${groupId} (score ${scoreOf(scores).toFixed(2)})`);
+
+            note(groupId, `${media.kind} DELETED, score ${scoreOf(scores).toFixed(2)}`);
 
             await delay(300);
             await kaya.sendMessage(from, { delete: mek.key }).catch(() => {});
@@ -287,6 +343,7 @@ export default {
         } catch (err) {
             // Never crash the bot because of the analysis
             console.error('❌ AntiPorn detect error:', err?.message || err);
+            if (noteGroup) note(noteGroup, `ERROR: ${err?.message || err}`);
         }
     }
 };
