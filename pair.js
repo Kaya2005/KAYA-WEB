@@ -446,7 +446,9 @@ export default async function startpairing(
         defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
         markOnlineOnConnect: false,
-        emitOwnEvents: false
+        emitOwnEvents: false,
+        syncFullHistory: false,
+        shouldSyncHistoryMessage: () => false
     });
 
     if (!kaya._patched) {

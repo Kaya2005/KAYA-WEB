@@ -50,6 +50,16 @@ const cooldownTracker = new Map();
 
 const chatbotCooldownTracker = new Map();
 
+// Free memory: forget entries older than 1 hour (these Maps otherwise grow forever)
+setInterval(() => {
+    const limit = Date.now() - 60 * 60 * 1000;
+    for (const map of [presenceTracker, cooldownTracker, chatbotCooldownTracker]) {
+        for (const [key, time] of map) {
+            if (time < limit) map.delete(key);
+        }
+    }
+}, 10 * 60 * 1000).unref();
+
 // ==========================================
 // LISTE DES UTILITAIRES (anti-*)
 // ==========================================
