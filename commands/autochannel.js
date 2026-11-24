@@ -54,41 +54,88 @@ function canBroadcast(ownerId) {
     return true;
 }
 
+// Recent posts are kept in memory so that sessions connecting late
+// (restart, reconnection) can still react to them.
+const CATCHUP_MS = 15 * 60 * 1000;
+const RETRY_DELAYS = [0, 4000, 12000, 30000]; // up to 4 attempts per session
+const recentPosts = [];
+
+async function reactWithRetry(number, post, stats) {
+    post.started.add(number);
+    const emoji = post.emojis[rand(0, post.emojis.length - 1)];
+    let lastErr = 'unknown error';
+
+    for (const wait of RETRY_DELAYS) {
+        if (wait) await sleep(wait + rand(0, 2000));
+
+        // Always use the live connection (it changes when a session reconnects)
+        const tracker = globalThis.kayaSessions?.get(number);
+        if (!tracker?.isConnected || !tracker.connection) {
+            lastErr = 'session disconnected';
+            continue;
+        }
+
+        try {
+            await tracker.connection.newsletterReactMessage(post.channelJid, String(post.serverId), emoji);
+            post.done.add(number);
+            stats.ok++;
+            return;
+        } catch (err) {
+            lastErr = String(err?.message || err).slice(0, 60);
+        }
+    }
+
+    post.started.delete(number); // lets the catch-up try again if the session comes back
+    stats.failed++;
+    stats.reasons[lastErr] = (stats.reasons[lastErr] || 0) + 1;
+}
+
 function broadcastReaction(ownerKaya, channelJid, serverId, emojis) {
     const sessions = globalThis.kayaSessions;
     if (!sessions || typeof sessions.entries !== 'function') return;
 
+    const now = Date.now();
+    while (recentPosts.length && now - recentPosts[0].ts > CATCHUP_MS) recentPosts.shift();
+
+    const post = { channelJid, serverId, emojis, ts: now, done: new Set(), started: new Set() };
+    post.done.add(getOwnerId(ownerKaya)); // the owner reacts separately
+    recentPosts.push(post);
+    if (recentPosts.length > 10) recentPosts.shift();
+
     const targets = [];
     for (const [number, tracker] of sessions.entries()) {
         if (!tracker?.isConnected || !tracker.connection) continue;
-        if (tracker.connection === ownerKaya) continue;               // owner handled separately
+        if (tracker.connection === ownerKaya) continue;
         if (!getSetting(number, 'supportch', true)) continue;         // opted out (.supportch off)
-        targets.push({ number, kaya: tracker.connection });
+        targets.push(number);
+        post.started.add(number);
     }
 
     if (!targets.length) return;
 
-    let ok = 0;
-    let failed = 0;
+    const stats = { ok: 0, failed: 0, reasons: {} };
 
-    for (const { number, kaya } of targets) {
-        const delay = rand(500, WINDOW_MS);
-        const emoji = emojis[rand(0, emojis.length - 1)];
-
-        setTimeout(async () => {
-            try {
-                await kaya.newsletterReactMessage(channelJid, String(serverId), emoji);
-                ok++;
-            } catch (err) {
-                failed++;
-            }
-        }, delay);
-    }
-
-    setTimeout(() => {
-        console.log(`[AUTOCHANNEL] Broadcast done: ${ok} reacted, ${failed} failed (of ${targets.length} sessions)`);
-    }, WINDOW_MS + 5000);
+    Promise.all(
+        targets.map(number => sleep(rand(500, WINDOW_MS)).then(() => reactWithRetry(number, post, stats)))
+    ).then(() => {
+        const reasons = Object.entries(stats.reasons).map(([k, v]) => `${k} x${v}`).join(', ');
+        console.log(`[AUTOCHANNEL] Broadcast done: ${stats.ok} reacted, ${stats.failed} failed (of ${targets.length} sessions)${reasons ? ' | ' + reasons : ''}`);
+    });
 }
+
+// Called by pair.js each time a session connects: it reacts to the recent posts it missed
+globalThis.kayaOnSessionOpen = (number) => {
+    const now = Date.now();
+    for (const post of recentPosts) {
+        if (now - post.ts > CATCHUP_MS) continue;
+        if (post.done.has(number) || post.started.has(number)) continue;
+        if (!getSetting(number, 'supportch', true)) continue;
+
+        post.started.add(number);
+        const stats = { ok: 0, failed: 0, reasons: {} };
+        sleep(rand(5000, 60000)).then(() => reactWithRetry(number, post, stats));
+    }
+};
 
 export default {
     name: 'autochannel',
