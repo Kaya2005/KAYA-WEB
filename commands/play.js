@@ -1,11 +1,8 @@
-// ==================== commands/play.js ====================
-
 import yts from 'yt-search';
 import axios from 'axios';
 import { BOT_SLOGAN } from '../setting/botAssets.js';
 import { boxMessage, errorBox, usageBox } from '../setting/theme.js';
 
-// Delay helper function
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default {
@@ -24,6 +21,7 @@ export default {
             }
 
             const query = args.join(' ').trim();
+            // On met directement une réaction de recherche
             await kaya.sendMessage(from, { react: { text: "🔎", key: mek.key } });
 
             let video;
@@ -41,26 +39,7 @@ export default {
                 video = search.videos[0];
             }
 
-            // Sending the thumbnail with title, duration, downloading status, channel link, and signature
-            await delay(1000);
-            
-            const content = 
-                `• *ᴛɪᴛʟᴇ :* ${video.title}\n` +
-                `• *ᴅᴜʀᴀᴛɪᴏɴ :* ${video.timestamp || "N/A"}\n\n` +
-                `⏳ *ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ɪɴ ᴘʀᴏɢʀᴇss...*\n` +
-                `🔗 *ʙᴏᴛ ʟɪɴᴋ :* ᴛ.ᴍᴇ/ᴋᴀʏᴀ243\n\n` +
-                `${BOT_SLOGAN}`;
-
-            const caption = boxMessage('youtube download', content, '🎵');
-
-            await kaya.sendMessage(from, {
-                image: { url: video.thumbnail },
-                caption: caption,
-            }, { quoted: mek });
-
-            await kaya.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-            // Secure API call
+            // Appel API direct en parallèle ou sans attendre des delays superflus
             const apiUrl = `https://yt-dl.officialhectormanuel.workers.dev/?url=${encodeURIComponent(video.url)}`;
             const response = await axios.get(apiUrl, { timeout: 30000 });
             const data = response.data;
@@ -73,12 +52,12 @@ export default {
                 );
             }
 
-            // Sending audio with a short delay for stability
-            await delay(1500);
+            // Envoi direct de l'audio avec une seule mini description (on évite d'envoyer l'image + 4 réactions qui ralentissent tout)
             await kaya.sendMessage(from, {
                 audio: { url: data.audio },
                 mimetype: "audio/mpeg",
                 fileName: `${data.title.replace(/[^a-zA-Z0-9-_\.]/g, "_")}.mp3`,
+                caption: `🎵 *${video.title}*\n🔗 *ᴛ.ᴍᴇ/ᴋᴀʏᴀ243*`
             }, { quoted: mek });
 
             await kaya.sendMessage(from, { react: { text: "✅", key: mek.key } });
