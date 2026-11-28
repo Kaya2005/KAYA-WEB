@@ -6,7 +6,7 @@ import { getString } from '../setting/language.js';
 const RANDOM_EMOJIS = ['❤️','😂','🎉','👍','🔥','😮','👏','🎊','🤯','😍','🥰','😎','🤩','💯','✨','🌟','💖','💕','💙','💚','💛','💜','🖤','🤍','🧡','😊','😇','🥳','😋','😜','🤪','🤗','🤭'];
 const getRandomEmoji = () => RANDOM_EMOJIS[Math.floor(Math.random() * RANDOM_EMOJIS.length)];
 
-// AJOUT : Cache pour éviter de réagir 10 fois à la même seconde et limiter la fréquence
+// Cache pour éviter de réagir 10 fois à la même seconde et limiter la fréquence
 const lastReaction = new Map();
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -117,27 +117,50 @@ export default {
 
     async listen(kaya, mek, from) {
         try {
-            if (mek.key?.fromMe) return;
+            // 🔎 LOG 1 : Message reçu
+            console.log("📥 [AUTOREACT LOG] Message reçu depuis :", from);
+
+            if (mek.key?.fromMe) {
+                console.log("🛑 [AUTOREACT LOG] Message ignoré (provient de moi-même)");
+                return;
+            }
             
             const ownerId = kaya.user?.id ? kaya.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
             const isEnabled = getSetting(ownerId, 'autoreact', false);
+            
+            // 🔎 LOG 2 : Vérification du statut d'activation
+            console.log("⚙️ [AUTOREACT LOG] Statut autoreact :", isEnabled, "(Owner ID:", ownerId, ")");
             if (!isEnabled) return;
 
             // SÉCURITÉ : Cooldown de 10 secondes par chat pour éviter le flood
             const now = Date.now();
-            if (lastReaction.has(from) && now - lastReaction.get(from) < 10000) return;
+            if (lastReaction.has(from) && now - lastReaction.get(from) < 10000) {
+                console.log("⏳ [AUTOREACT LOG] Ignoré en raison du cooldown sur :", from);
+                return;
+            }
             lastReaction.set(from, now);
 
             const mode = getSetting(ownerId, 'autoreactMode', 'all');
             const isGroup = from.endsWith('@g.us');
 
-            if (mode === 'private' && isGroup) return;
-            if (mode === 'group' && !isGroup) return;
+            // 🔎 LOG 3 : Vérification du mode
+            console.log("📊 [AUTOREACT LOG] Mode actuel :", mode, "| Est un groupe :", isGroup);
+
+            if (mode === 'private' && isGroup) {
+                console.log("🛑 [AUTOREACT LOG] Ignoré (Mode privé actif et chat est un groupe)");
+                return;
+            }
+            if (mode === 'group' && !isGroup) {
+                console.log("🛑 [AUTOREACT LOG] Ignoré (Mode groupe actif et chat est privé)");
+                return;
+            }
 
             // SÉCURITÉ : Petit délai aléatoire pour simuler une lecture humaine
             await delay(Math.floor(Math.random() * 2000) + 1000); 
             
-            await kaya.sendMessage(from, { react: { text: getRandomEmoji(), key: mek.key } });
+            const emoji = getRandomEmoji();
+            await kaya.sendMessage(from, { react: { text: emoji, key: mek.key } });
+            console.log("✅ [AUTOREACT LOG] Réaction envoyée avec succès (", emoji, ") à :", from);
         } catch (err) {
             console.error('❌ Auto-react listen error:', err);
         }
